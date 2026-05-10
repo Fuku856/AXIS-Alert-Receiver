@@ -116,43 +116,71 @@ class UIManager:
         self.settings_window.geometry("450x350")
         self.settings_window.resizable(False, False)
 
-        ttk.Label(self.settings_window, text="AXIS アクセストークン (JWT):").pack(pady=5, padx=10, anchor='w')
-        self.token_entry = ttk.Entry(self.settings_window, width=50)
+        # タブコントロールの作成
+        notebook = ttk.Notebook(self.settings_window, takefocus=False)
+        notebook.pack(expand=True, fill='both', padx=10, pady=10)
+
+        def on_tab_changed(event):
+            self.settings_window.focus_set()
+            if hasattr(self, 'token_entry'):
+                self.token_entry.select_clear()
+                
+        notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
+
+        # --- タブ1: AXISトークン ---
+        tab_connection = ttk.Frame(notebook)
+        notebook.add(tab_connection, text='AXISトークン')
+
+        ttk.Label(tab_connection, text="AXIS アクセストークン (JWT):").pack(pady=(15, 5), padx=10, anchor='w')
+        self.token_entry = ttk.Entry(tab_connection, width=50)
         self.token_entry.pack(pady=5, padx=10)
         self.token_entry.insert(0, config.get_token())
 
-        ttk.Label(self.settings_window, text="受信するチャンネル:").pack(pady=5, padx=10, anchor='w')
+        self.status_label = ttk.Label(tab_connection, text=f"状態: {self.client.status}")
+        self.status_label.pack(pady=20, padx=10, anchor='w')
+
+        # --- タブ2: チャンネル設定 ---
+        tab_channels = ttk.Frame(notebook)
+        notebook.add(tab_channels, text='チャンネル設定')
+
+        ttk.Label(tab_channels, text="受信するチャンネル:").pack(pady=(15, 5), padx=10, anchor='w')
         
         self.channel_vars = {}
         self.channel_widgets = {}
         channels = ["breaking-news", "jmx-meteorology", "jmx-seismology", "jmx-volcanology", "quake-one", "eew"]
         saved_channels = config.get_channels()
 
-        # ポップアップ通知設定
-        self.show_popup_var = tk.BooleanVar(value=config.get_show_popup())
-        popup_chk = ttk.Checkbutton(self.settings_window, text="受信時にポップアップウィンドウを表示する", variable=self.show_popup_var)
-        popup_chk.pack(pady=(10, 5), padx=10, anchor='w')
-        
-        channels_frame = ttk.Frame(self.settings_window)
+        channels_frame = ttk.Frame(tab_channels)
         channels_frame.pack(padx=20, anchor='w')
         
         for ch in channels:
             var = tk.BooleanVar(value=(ch in saved_channels))
-            chk = ttk.Checkbutton(channels_frame, text=ch, variable=var)
-            chk.pack(anchor='w')
+            chk = ttk.Checkbutton(channels_frame, text=ch, variable=var, takefocus=False)
+            chk.pack(anchor='w', pady=2)
             self.channel_vars[ch] = var
             self.channel_widgets[ch] = chk
+
+        note_text = "グレーアウトされているチャンネルは、\n設定されているAXISトークンで購読されていません。"
+        ttk.Label(tab_channels, text=note_text, font=("Helvetica", 8), foreground="gray").pack(pady=(10, 0), padx=20, anchor='w')
+
+        # --- タブ3: UI設定 ---
+        tab_ui = ttk.Frame(notebook)
+        notebook.add(tab_ui, text='UI設定')
+
+        ttk.Label(tab_ui, text="通知設定:").pack(pady=(15, 5), padx=10, anchor='w')
+
+        self.show_popup_var = tk.BooleanVar(value=config.get_show_popup())
+        popup_chk = ttk.Checkbutton(tab_ui, text="受信時にポップアップウィンドウを表示する", variable=self.show_popup_var, takefocus=False)
+        popup_chk.pack(pady=5, padx=20, anchor='w')
 
         # トークン入力時にリアルタイムでチェックボックスの状態を更新する
         self.token_entry.bind("<KeyRelease>", self.update_checkboxes_state)
         # 初期状態の反映
         self.update_checkboxes_state()
 
-        self.status_label = ttk.Label(self.settings_window, text=f"状態: {self.client.status}")
-        self.status_label.pack(pady=10, padx=10, anchor='w')
-
+        # --- 下部のボタン領域 (常に表示) ---
         btn_frame = ttk.Frame(self.settings_window)
-        btn_frame.pack(pady=10)
+        btn_frame.pack(side='bottom', pady=(0, 10))
 
         test_btn = ttk.Button(btn_frame, text="テスト通知を実行", command=self.send_test_notification)
         test_btn.pack(side='left', padx=5)
