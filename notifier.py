@@ -22,8 +22,6 @@ def show_toast(title, message, url=None):
         )
         if url:
             toast.add_actions(label="詳細を見る", launch=url)
-            # 通知本体のクリックでも開くようにする
-            toast.set_audio(audio=None, loop=False) # デフォルト音
             
             # winotifyでは、通知自体のクリックアクション（launchパラメータ）を
             # Notificationクラスのコンストラクタで指定できないため、アクションボタンで対応する。

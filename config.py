@@ -38,3 +38,13 @@ def set_last_refresh(timestamp):
     config = load_config()
     config["last_refresh_time"] = timestamp
     save_config(config)
+
+def get_channels():
+    # デフォルトでbreaking-newsのみ有効とする
+    return load_config().get("channels", ["breaking-news"])
+
+def set_channels(channels_list):
+    config = load_config()
+    config["channels"] = channels_list
+    save_config(config)
+

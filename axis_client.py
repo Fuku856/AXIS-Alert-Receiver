@@ -105,8 +105,10 @@ class AxisClient(threading.Thread):
             channel = data.get("channel", "unknown")
             msg_content = data.get("message", {})
             
-            # breaking-news以外のチャンネル（地震や気象情報など）もすべてUIに送る
-            self.on_message_callback(channel, msg_content)
+            # 設定画面でチェックを入れたチャンネルのみ受信する
+            subscribed_channels = config.get_channels()
+            if channel in subscribed_channels:
+                self.on_message_callback(channel, msg_content)
         except json.JSONDecodeError:
             self.on_message_callback("パースエラー", f"不正なフォーマットを受信: {message}")
 
