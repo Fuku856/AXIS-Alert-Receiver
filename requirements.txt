@@ -1,0 +1,6 @@
+pystray
+Pillow
+websocket-client
+winotify
+requests
+pyinstaller
