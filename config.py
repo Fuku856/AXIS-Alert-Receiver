@@ -1,6 +1,10 @@
 import json
 import os
 import threading
+import keyring
+
+KEYRING_SERVICE_NAME = "AXIS_Breaking_News"
+KEYRING_ACCOUNT_NAME = "access_token"
 
 CONFIG_FILE = "config.json"
 _config_lock = threading.Lock()
@@ -8,12 +12,12 @@ _config_lock = threading.Lock()
 def load_config():
     with _config_lock:
         if not os.path.exists(CONFIG_FILE):
-            return {"access_token": ""}
+            return {}
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return {"access_token": ""}
+            return {}
 
 def save_config(config_data):
     with _config_lock:
@@ -24,12 +28,24 @@ def save_config(config_data):
             print(f"Error saving config: {e}")
 
 def get_token():
-    return load_config().get("access_token", "")
+    try:
+        token = keyring.get_password(KEYRING_SERVICE_NAME, KEYRING_ACCOUNT_NAME)
+        return token if token is not None else ""
+    except Exception as e:
+        print(f"Error getting token from keyring: {e}")
+        return ""
 
 def set_token(token):
-    config = load_config()
-    config["access_token"] = token
-    save_config(config)
+    try:
+        if token:
+            keyring.set_password(KEYRING_SERVICE_NAME, KEYRING_ACCOUNT_NAME, token)
+        else:
+            try:
+                keyring.delete_password(KEYRING_SERVICE_NAME, KEYRING_ACCOUNT_NAME)
+            except keyring.errors.PasswordDeleteError:
+                pass
+    except Exception as e:
+        print(f"Error setting token to keyring: {e}")
 
 def get_last_refresh():
     return load_config().get("last_refresh_time", 0.0)
