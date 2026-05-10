@@ -48,3 +48,10 @@ def set_channels(channels_list):
     config["channels"] = channels_list
     save_config(config)
 
+def get_show_popup():
+    return load_config().get("show_popup", True)
+
+def set_show_popup(show):
+    config = load_config()
+    config["show_popup"] = show
+    save_config(config)

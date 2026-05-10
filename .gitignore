@@ -1,0 +1,3 @@
+# Pythonのキャッシュファイル
+__pycache__/
+*.pyc

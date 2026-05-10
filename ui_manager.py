@@ -57,7 +57,8 @@ class UIManager:
                 self.show_log_window()
                 
                 # さらに目立つように専用のポップアップも出す
-                self.show_alert_popup(title, body, url)
+                if config.get_show_popup():
+                    self.show_alert_popup(title, body, url)
 
             self.text_area.insert(tk.END, text)
             self.text_area.configure(state='disabled')
@@ -99,6 +100,9 @@ class UIManager:
         close_btn = ttk.Button(alert, text="閉じる", command=alert.destroy)
         close_btn.pack(pady=10)
         
+        # Escキーで閉じられるようにする
+        alert.bind("<Escape>", lambda e: alert.destroy())
+        
         # 音を鳴らす（Windows標準のエラー音等）
         self.root.bell()
 
@@ -123,6 +127,11 @@ class UIManager:
         self.channel_widgets = {}
         channels = ["breaking-news", "jmx-meteorology", "jmx-seismology", "jmx-volcanology", "quake-one", "eew"]
         saved_channels = config.get_channels()
+
+        # ポップアップ通知設定
+        self.show_popup_var = tk.BooleanVar(value=config.get_show_popup())
+        popup_chk = ttk.Checkbutton(self.settings_window, text="受信時にポップアップウィンドウを表示する", variable=self.show_popup_var)
+        popup_chk.pack(pady=(10, 5), padx=10, anchor='w')
         
         channels_frame = ttk.Frame(self.settings_window)
         channels_frame.pack(padx=20, anchor='w')
@@ -193,6 +202,7 @@ class UIManager:
         selected_channels = [ch for ch, var in self.channel_vars.items() if var.get()]
         config.set_channels(selected_channels)
         config.set_token(new_token)
+        config.set_show_popup(self.show_popup_var.get())
         
         from tkinter import messagebox
         messagebox.showinfo(

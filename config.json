@@ -1,4 +1,9 @@
 {
     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiRnVrdTg1NiIsInR5cGUiOjAsImNvbm5lY3Rpb24iOjJ9LCJjaGFubmVscyI6WyJqbXgtc2Vpc21vbG9neSIsImJyZWFraW5nLW5ld3MiLCJlZXciXSwiZXhwIjoxNzgwMjcxOTk5fQ.r9jW6eSV2MP3GDgAIWn4nFRkr0595K70s4VWJnAFLQI",
-    "last_refresh_time": 1778401330.7958217
+    "last_refresh_time": 1778401330.7958217,
+    "channels": [
+        "breaking-news",
+        "jmx-seismology",
+        "eew"
+    ]
 }
