@@ -15,7 +15,7 @@ def show_toast(title, message, url=None):
     """
     try:
         toast = Notification(
-            app_id="AXIS Breaking News",
+            app_id="AXIS Alert Receiver",
             title=title,
             msg=message,
             duration="long"

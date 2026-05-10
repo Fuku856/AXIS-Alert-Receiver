@@ -30,7 +30,7 @@ def setup_tray(ui, client):
         pystray.MenuItem("終了", on_quit)
     )
 
-    icon = pystray.Icon("AXIS Breaking News", create_image(), "AXIS Breaking News", menu)
+    icon = pystray.Icon("AXIS-Alert-Receiver", create_image(), "AXIS Alert Receiver", menu)
     return icon
 
 def main():

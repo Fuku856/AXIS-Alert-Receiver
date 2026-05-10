@@ -14,7 +14,7 @@ class UIManager:
 
         # ログウィンドウの作成
         self.log_window = tk.Toplevel(self.root)
-        self.log_window.title("AXIS Breaking News - ログ")
+        self.log_window.title("AXIS Alert Receiver - ログ")
         self.log_window.geometry("600x400")
         self.log_window.protocol("WM_DELETE_WINDOW", self.hide_log_window)
         self.log_window.withdraw() # 初期は非表示
@@ -112,7 +112,7 @@ class UIManager:
             return
 
         self.settings_window = tk.Toplevel(self.root)
-        self.settings_window.title("設定 - AXIS Breaking News")
+        self.settings_window.title("設定 - AXIS Alert Receiver")
         self.settings_window.geometry("450x350")
         self.settings_window.resizable(False, False)
 
