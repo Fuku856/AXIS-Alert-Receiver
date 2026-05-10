@@ -6,7 +6,19 @@ import axis_client
 import sys
 
 def create_image():
-    # pystray用の動的アイコンを生成 (16x16の青い四角形にAの文字)
+    # icon.png があればpystray用のアイコンとして読み込む。なければ動的生成。
+    import os
+    def get_app_path():
+        import sys
+        if getattr(sys, 'frozen', False):
+            return sys._MEIPASS
+        return os.path.dirname(os.path.abspath(__file__))
+
+    icon_path = os.path.join(get_app_path(), "icon.png")
+    if os.path.exists(icon_path):
+        return Image.open(icon_path)
+
+    # 見つからない場合は動的アイコンを生成 (16x16の青い四角形にAの文字)
     image = Image.new('RGB', (64, 64), color=(0, 122, 204))
     dc = ImageDraw.Draw(image)
     dc.text((20, 20), "A", fill=(255, 255, 255))

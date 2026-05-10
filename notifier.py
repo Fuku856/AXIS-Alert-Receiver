@@ -8,14 +8,52 @@ def get_app_path():
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
 
+def setup_shortcut(app_id, icon_path):
+    """
+    Windowsの仕様により、通知タイトル左のアプリアイコンを表示するには、
+    スタートメニューにアイコン付きのショートカットが存在する必要があります。
+    """
+    if not icon_path or not os.path.exists(icon_path):
+        return
+
+    programs_path = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs")
+    shortcut_path = os.path.join(programs_path, f"{app_id}.lnk")
+    
+    # ターゲットパスの決定（exe化されている場合はそのexe、スクリプトの場合はpython.exe）
+    target_path = sys.executable
+
+    vbs_script = f"""
+Set ws = WScript.CreateObject("WScript.Shell")
+Set s = ws.CreateShortcut("{shortcut_path}")
+s.TargetPath = "{target_path}"
+s.IconLocation = "{icon_path}"
+s.Save
+"""
+    vbs_path = os.path.join(os.environ["TEMP"], "axis_shortcut.vbs")
+    try:
+        with open(vbs_path, "w", encoding="utf-8") as f:
+            f.write(vbs_script)
+        os.system(f'cscript //nologo "{vbs_path}"')
+    except Exception as e:
+        print(f"Failed to create shortcut: {e}")
+
 def show_toast(title, message, url=None):
     """
     Windowsのトースト通知を表示する。
     urlが指定されている場合は、通知クリック時にブラウザで開く。
     """
     try:
+        # icon.png が存在すれば絶対パスを取得
+        icon_path = os.path.join(get_app_path(), "icon.png")
+        if not os.path.exists(icon_path):
+            icon_path = None
+            
+        # 通知を送る前にショートカットをセットアップ（アイコンをOSに認識させる）
+        app_id = "AXIS Alert Receiver"
+        setup_shortcut(app_id, icon_path)
+
         toast = Notification(
-            app_id="AXIS Alert Receiver",
+            app_id=app_id,
             title=title,
             msg=message,
             duration="long"

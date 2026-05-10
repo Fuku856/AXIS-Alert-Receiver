@@ -70,7 +70,8 @@ class AxisClient(threading.Thread):
     def connect_ws(self, server_url):
         self._set_status(f"接続中: {server_url}")
         websocket.enableTrace(False)
-        headers = [f"Authorization: Bearer {self.token}"]
+        safe_token = self.token.strip() if self.token else ""
+        headers = [f"Authorization: Bearer {safe_token}"]
         
         self.ws = websocket.WebSocketApp(
             f"{server_url}/socket",
@@ -113,16 +114,19 @@ class AxisClient(threading.Thread):
             self.on_message_callback("パースエラー", f"不正なフォーマットを受信: {message}")
 
     def on_error(self, ws, error):
-        pass # 切断時にon_closeが呼ばれるため、ここでは詳細処理しない
+        print(f"WebSocket Error: {error}")
 
     def on_close(self, ws, close_status_code, close_msg):
         self.ws = None
         if self.running:
-            self._set_status("切断されました。再接続を試みます...")
+            self._set_status(f"切断されました。({close_status_code}: {close_msg}) 再接続を試みます...")
+            print(f"WebSocket Closed: {close_status_code} - {close_msg}")
 
     def run(self):
         while self.running:
             self.token = config.get_token()
+            if self.token:
+                self.token = self.token.strip()
             if not self.token:
                 self._set_status("トークン未設定")
                 time.sleep(2)

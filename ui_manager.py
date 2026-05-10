@@ -12,6 +12,22 @@ class UIManager:
         self.root.withdraw() # メインウィンドウは非表示
         self.root.protocol("WM_DELETE_WINDOW", self.hide_log_window) # 閉じるボタンで非表示
 
+        # アプリアイコンの設定
+        import os
+        import sys
+        def get_app_path():
+            if getattr(sys, 'frozen', False):
+                return sys._MEIPASS
+            return os.path.dirname(os.path.abspath(__file__))
+            
+        icon_path = os.path.join(get_app_path(), "icon.png")
+        if os.path.exists(icon_path):
+            try:
+                self.icon_photo = tk.PhotoImage(file=icon_path)
+                self.root.iconphoto(True, self.icon_photo) # Trueで全てのToplevelに適用
+            except Exception as e:
+                print(f"Failed to load icon for UI: {e}")
+
         # ログウィンドウの作成
         self.log_window = tk.Toplevel(self.root)
         self.log_window.title("AXIS Alert Receiver - ログ")
@@ -68,8 +84,14 @@ class UIManager:
 
     def update_status(self, status):
         def _update():
-            if self.settings_window and self.settings_window.winfo_exists():
-                self.status_label.config(text=f"状態: {status}")
+            try:
+                if self.settings_window and self.settings_window.winfo_exists():
+                    if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                        self.status_label.config(text=f"状態: {status}")
+            except tk.TclError:
+                pass
+            except Exception:
+                pass
         self.root.after(0, _update)
 
     def show_log_window(self):
@@ -121,9 +143,15 @@ class UIManager:
         notebook.pack(expand=True, fill='both', padx=10, pady=10)
 
         def on_tab_changed(event):
-            self.settings_window.focus_set()
-            if hasattr(self, 'token_entry'):
-                self.token_entry.select_clear()
+            try:
+                if self.settings_window and self.settings_window.winfo_exists():
+                    self.settings_window.focus_set()
+                    if hasattr(self, 'token_entry') and self.token_entry.winfo_exists():
+                        self.token_entry.select_clear()
+            except tk.TclError:
+                pass
+            except Exception:
+                pass
                 
         notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
 
@@ -244,6 +272,7 @@ class UIManager:
         self.client.restart() # 新しいトークンと設定で強制再接続
         if self.settings_window:
             self.settings_window.destroy()
+            self.settings_window = None
 
     def mainloop(self):
         self.root.mainloop()

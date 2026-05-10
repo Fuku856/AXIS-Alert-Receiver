@@ -28,7 +28,7 @@ jobs:
 
     - name: Build executable
       run: |
-        pyinstaller --noconfirm --onedir --windowed --hidden-import=keyring.backends.Windows --name "AXIS-Alert-Receiver" main.py
+        pyinstaller --noconfirm --onedir --windowed --hidden-import=win32crypt --add-data "icon.png;." --icon "icon.png" --name "AXIS-Alert-Receiver" main.py
 
     - name: Create Zip Archive
       run: |

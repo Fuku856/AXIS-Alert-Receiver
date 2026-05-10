@@ -4,4 +4,4 @@ websocket-client
 winotify
 requests
 pyinstaller
-keyring
+pywin32
