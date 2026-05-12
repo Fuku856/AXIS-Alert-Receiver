@@ -6,6 +6,11 @@ import json
 import notifier
 import message_formatter
 import difflib
+import webbrowser
+import os
+import sys
+import base64
+from tkinter import messagebox
 
 class UIManager:
     def __init__(self, axis_client):
@@ -18,8 +23,6 @@ class UIManager:
         self.active_popups = {}
 
         # アプリアイコンの設定
-        import os
-        import sys
         def get_app_path():
             if getattr(sys, 'frozen', False):
                 return sys._MEIPASS
@@ -126,6 +129,15 @@ class UIManager:
                 if time_label and time_label.winfo_exists() and timestamp:
                     time_label.config(text=f"更新: {timestamp}")
 
+                # URLの更新とボタンの表示状態の同期
+                popup_data["current_url"] = url
+                url_button = popup_data.get("url_button")
+                if url_button and url_button.winfo_exists():
+                    if url:
+                        url_button.pack(side="top", pady=(5, 0))
+                    else:
+                        url_button.pack_forget()
+
                 text_widget.configure(state='normal')
                 text_widget.delete("1.0", tk.END)
                 
@@ -180,12 +192,25 @@ class UIManager:
         button_frame = ttk.Frame(alert)
         button_frame.pack(side="bottom", fill="x", pady=(0, 10))
 
+        # URLボタン用フレーム
+        url_btn_frame = ttk.Frame(button_frame)
+        url_btn_frame.pack(side="top", fill="x")
+        
+        # 閉じるボタン用フレーム
+        close_btn_frame = ttk.Frame(button_frame)
+        close_btn_frame.pack(side="top", fill="x")
+
+        def open_url():
+            if event_id in self.active_popups:
+                current_url = self.active_popups[event_id].get("current_url")
+                if current_url:
+                    webbrowser.open(current_url)
+
+        url_button = ttk.Button(url_btn_frame, text="ブラウザで詳細を開く", command=open_url)
         if url:
-            import webbrowser
-            btn = ttk.Button(button_frame, text="ブラウザで詳細を開く", command=lambda: webbrowser.open(url))
-            btn.pack(side="top", pady=(5, 0))
+            url_button.pack(side="top", pady=(5, 0))
             
-        close_btn = ttk.Button(button_frame, text="閉じる", command=on_close)
+        close_btn = ttk.Button(close_btn_frame, text="閉じる", command=on_close)
         close_btn.pack(side="top", pady=5)
 
         # 本文表示 (ScrolledText) - 残りの領域をすべて使用する
@@ -209,6 +234,8 @@ class UIManager:
             "text_widget": text_widget,
             "title_label": title_label,
             "time_label": time_label,
+            "url_button": url_button,
+            "current_url": url,
             "last_body": body
         }
         
@@ -318,7 +345,6 @@ class UIManager:
         
         if is_valid_jwt:
             try:
-                import base64
                 parts = token.split('.')
                 payload_b64 = parts[1]
                 # Base64パディングを補完
@@ -346,7 +372,6 @@ class UIManager:
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.get())
         
-        from tkinter import messagebox
         messagebox.showinfo(
             "確認", 
             "設定を保存しました。\n\n"
