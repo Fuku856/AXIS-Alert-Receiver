@@ -6,6 +6,11 @@ import json
 import notifier
 import message_formatter
 import difflib
+import webbrowser
+import os
+import sys
+import base64
+from tkinter import messagebox
 
 class UIManager:
     def __init__(self, axis_client):
@@ -18,8 +23,6 @@ class UIManager:
         self.active_popups = {}
 
         # アプリアイコンの設定
-        import os
-        import sys
         def get_app_path():
             if getattr(sys, 'frozen', False):
                 return sys._MEIPASS
@@ -71,14 +74,14 @@ class UIManager:
                 text += "-" * 40 + "\n"
                 
                 # トースト通知も出す (トーストには短い概要を出す)
-                notifier.show_toast(title, "新しい情報を受信しました", url)
+                notifier.show_toast(title, f"新しい情報を受信しました\n受信: {timestamp}", url)
                 
                 # 自動的にログウィンドウを表示
                 self.show_log_window()
                 
                 # さらに目立つように専用のポップアップも出す
                 if config.get_show_popup():
-                    self.show_alert_popup(event_id, title, body, url)
+                    self.show_alert_popup(event_id, title, body, url, timestamp)
 
             self.text_area.insert(tk.END, text)
             self.text_area.configure(state='disabled')
@@ -105,7 +108,7 @@ class UIManager:
     def hide_log_window(self):
         self.log_window.withdraw()
 
-    def show_alert_popup(self, event_id, title, body, url):
+    def show_alert_popup(self, event_id, title, body, url, timestamp=None):
         # 既に同じイベントのウィンドウが開いているかチェック
         if event_id in self.active_popups:
             popup_data = self.active_popups[event_id]
@@ -121,6 +124,19 @@ class UIManager:
                 title_label = popup_data.get("title_label")
                 if title_label and title_label.winfo_exists():
                     title_label.config(text=title)
+
+                time_label = popup_data.get("time_label")
+                if time_label and time_label.winfo_exists() and timestamp:
+                    time_label.config(text=f"更新: {timestamp}")
+
+                # URLの更新とボタンの表示状態の同期
+                popup_data["current_url"] = url
+                url_button = popup_data.get("url_button")
+                if url_button and url_button.winfo_exists():
+                    if url:
+                        url_button.pack(side="top", pady=(5, 0))
+                    else:
+                        url_button.pack_forget()
 
                 text_widget.configure(state='normal')
                 text_widget.delete("1.0", tk.END)
@@ -161,13 +177,37 @@ class UIManager:
             
         alert.protocol("WM_DELETE_WINDOW", on_close)
         
+        # ヘッダー領域 (右上に日時)
+        header_frame = tk.Frame(alert)
+        header_frame.pack(fill="x", padx=10, pady=(5, 0))
+        
+        time_label = tk.Label(header_frame, text=f"受信: {timestamp}" if timestamp else "", font=("Helvetica", 9), fg="gray")
+        time_label.pack(side="right")
+        
         # タイトル表示
         title_label = tk.Label(alert, text=title, font=("Helvetica", 14, "bold"), fg="red", wraplength=600)
-        title_label.pack(pady=10)
+        title_label.pack(pady=(0, 10))
         
-        # 本文表示 (ScrolledText)
+        # 先にボタン領域を下部 (side="bottom") に確保して見切れを防ぐ
+        button_frame = ttk.Frame(alert)
+        button_frame.pack(side="bottom", fill="x", pady=(0, 10))
+
+        def open_url():
+            if event_id in self.active_popups:
+                current_url = self.active_popups[event_id].get("current_url")
+                if current_url:
+                    webbrowser.open(current_url)
+
+        url_button = ttk.Button(button_frame, text="ブラウザで詳細を開く", command=open_url)
+        if url:
+            url_button.pack(side="top", pady=(5, 0))
+            
+        close_btn = ttk.Button(button_frame, text="閉じる", command=on_close)
+        close_btn.pack(side="top", pady=5)
+
+        # 本文表示 (ScrolledText) - 残りの領域をすべて使用する
         text_frame = ttk.Frame(alert)
-        text_frame.pack(pady=5, padx=10, fill="both", expand=True)
+        text_frame.pack(side="top", pady=5, padx=10, fill="both", expand=True)
         
         text_widget = scrolledtext.ScrolledText(text_frame, wrap='word', font=("Consolas", 10))
         text_widget.pack(fill="both", expand=True)
@@ -178,14 +218,6 @@ class UIManager:
         text_widget.insert(tk.END, body)
         text_widget.configure(state='disabled')
         
-        if url:
-            import webbrowser
-            btn = ttk.Button(alert, text="ブラウザで詳細を開く", command=lambda: webbrowser.open(url))
-            btn.pack(pady=5)
-            
-        close_btn = ttk.Button(alert, text="閉じる", command=on_close)
-        close_btn.pack(pady=10)
-        
         alert.bind("<Escape>", lambda e: on_close())
         
         # 管理用辞書に登録
@@ -193,6 +225,9 @@ class UIManager:
             "window": alert,
             "text_widget": text_widget,
             "title_label": title_label,
+            "time_label": time_label,
+            "url_button": url_button,
+            "current_url": url,
             "last_body": body
         }
         
@@ -302,7 +337,6 @@ class UIManager:
         
         if is_valid_jwt:
             try:
-                import base64
                 parts = token.split('.')
                 payload_b64 = parts[1]
                 # Base64パディングを補完
@@ -330,7 +364,6 @@ class UIManager:
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.get())
         
-        from tkinter import messagebox
         messagebox.showinfo(
             "確認", 
             "設定を保存しました。\n\n"
