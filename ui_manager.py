@@ -192,25 +192,17 @@ class UIManager:
         button_frame = ttk.Frame(alert)
         button_frame.pack(side="bottom", fill="x", pady=(0, 10))
 
-        # URLボタン用フレーム
-        url_btn_frame = ttk.Frame(button_frame)
-        url_btn_frame.pack(side="top", fill="x")
-        
-        # 閉じるボタン用フレーム
-        close_btn_frame = ttk.Frame(button_frame)
-        close_btn_frame.pack(side="top", fill="x")
-
         def open_url():
             if event_id in self.active_popups:
                 current_url = self.active_popups[event_id].get("current_url")
                 if current_url:
                     webbrowser.open(current_url)
 
-        url_button = ttk.Button(url_btn_frame, text="ブラウザで詳細を開く", command=open_url)
+        url_button = ttk.Button(button_frame, text="ブラウザで詳細を開く", command=open_url)
         if url:
             url_button.pack(side="top", pady=(5, 0))
             
-        close_btn = ttk.Button(close_btn_frame, text="閉じる", command=on_close)
+        close_btn = ttk.Button(button_frame, text="閉じる", command=on_close)
         close_btn.pack(side="top", pady=5)
 
         # 本文表示 (ScrolledText) - 残りの領域をすべて使用する
