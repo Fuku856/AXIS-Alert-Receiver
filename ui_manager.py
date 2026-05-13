@@ -240,8 +240,7 @@ class UIManager:
 
         self.settings_window = tk.Toplevel(self.root)
         self.settings_window.title("設定 - AXIS Alert Receiver")
-        self.settings_window.geometry("450x350")
-        self.settings_window.resizable(False, False)
+        self.settings_window.minsize(500, 350)
 
         # タブコントロールの作成
         notebook = ttk.Notebook(self.settings_window, takefocus=False)
@@ -280,6 +279,7 @@ class UIManager:
         
         self.channel_vars = {}
         self.channel_widgets = {}
+        self.channel_labels = {}
         channels = ["breaking-news", "jmx-meteorology", "jmx-seismology", "jmx-volcanology", "quake-one", "eew"]
         saved_channels = config.get_channels()
 
@@ -288,8 +288,17 @@ class UIManager:
         
         for ch in channels:
             var = tk.BooleanVar(value=(ch in saved_channels))
+            
             chk = ttk.Checkbutton(channels_frame, text=ch, variable=var, takefocus=False)
-            chk.pack(anchor='w', pady=2)
+            chk.pack(anchor='w', pady=(5, 0) if ch == channels[0] else (2, 0))
+            
+            # message_formatterから公式のジャンル説明文を取得して改行対応のラベルとして追加
+            genre = getattr(message_formatter, "CHANNEL_DESCRIPTIONS", {}).get(ch, message_formatter.CHANNEL_TITLES.get(ch, ""))
+            if genre:
+                desc_lbl = ttk.Label(channels_frame, text=genre, font=("Helvetica", 8), foreground="#555555", wraplength=380)
+                desc_lbl.pack(anchor='w', padx=(20, 0), pady=(0, 5))
+                self.channel_labels[ch] = desc_lbl
+
             self.channel_vars[ch] = var
             self.channel_widgets[ch] = chk
 
@@ -350,11 +359,16 @@ class UIManager:
                 pass
                 
         for ch, chk_widget in self.channel_widgets.items():
-            if is_valid_jwt and ch not in subscribed_in_token:
+            lbl_widget = getattr(self, 'channel_labels', {}).get(ch)
+            if not is_valid_jwt or ch not in subscribed_in_token:
                 chk_widget.state(['disabled'])
-                self.channel_vars[ch].set(False) # 未購読ならチェックも外す
+                if lbl_widget:
+                    lbl_widget.configure(foreground="#aaaaaa")
+                self.channel_vars[ch].set(False) # 未購読または無効なトークンならチェックも外す
             else:
                 chk_widget.state(['!disabled'])
+                if lbl_widget:
+                    lbl_widget.configure(foreground="#555555")
 
     def save_settings(self):
         new_token = self.token_entry.get().strip()

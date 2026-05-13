@@ -10,6 +10,15 @@ CHANNEL_TITLES = {
     "breaking-news": "ニュース速報"
 }
 
+CHANNEL_DESCRIPTIONS = {
+    "jmx-meteorology": "気象庁電文のうち地震と火山に関するものを除く気象情報",
+    "jmx-seismology": "気象庁電文のうち地震に関係する情報",
+    "jmx-volcanology": "気象庁電文のうち火山に関係する情報",
+    "quake-one": "QUAKE.ONEで提供中の地震概要、震源・震度情報、震度マップ画像",
+    "eew": "緊急地震速報 (beta)",
+    "breaking-news": "ニュース速報 (beta)"
+}
+
 def remove_empty_elements(data):
     """再帰的に辞書やリストから空の要素を削除する"""
     if isinstance(data, dict):
