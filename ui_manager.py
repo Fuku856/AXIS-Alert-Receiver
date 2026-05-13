@@ -279,7 +279,8 @@ class UIManager:
         self.channel_vars = {}
         self.channel_widgets = {}
         self.channel_labels = {}
-        channels = ["breaking-news", "jmx-meteorology", "jmx-seismology", "jmx-volcanology", "quake-one", "eew"]
+        # チャンネルリストを message_formatter から取得するように一元管理化
+        channels = list(message_formatter.CHANNEL_TITLES.keys())
         saved_channels = config.get_channels()
 
         channels_frame = ttk.Frame(tab_channels)
@@ -294,12 +295,23 @@ class UIManager:
             # message_formatterから公式のジャンル説明文を取得して改行対応のラベルとして追加
             genre = getattr(message_formatter, "CHANNEL_DESCRIPTIONS", {}).get(ch, message_formatter.CHANNEL_TITLES.get(ch, ""))
             if genre:
-                desc_lbl = ttk.Label(channels_frame, text=genre, font=("Helvetica", 8), foreground="#555555", wraplength=380)
+                # wraplengthは動的に調整するため、ここでは指定しないか仮値を置く
+                desc_lbl = ttk.Label(channels_frame, text=genre, font=("Helvetica", 8), foreground="#555555")
                 desc_lbl.pack(anchor='w', padx=(20, 0), pady=(0, 5))
                 self.channel_labels[ch] = desc_lbl
 
             self.channel_vars[ch] = var
             self.channel_widgets[ch] = chk
+
+        # レスポンシブな折り返し幅の調整
+        def on_configure(event):
+            # パディングを考慮して折り返し幅を計算
+            new_wraplength = event.width - 60
+            if new_wraplength > 0:
+                for lbl in self.channel_labels.values():
+                    lbl.configure(wraplength=new_wraplength)
+        
+        tab_channels.bind("<Configure>", on_configure)
 
         note_text = "グレーアウトされているチャンネルは、\n設定されているAXISトークンで購読されていません。"
         ttk.Label(tab_channels, text=note_text, font=("Helvetica", 8), foreground="gray").pack(pady=(10, 0), padx=20, anchor='w')
@@ -359,15 +371,22 @@ class UIManager:
                 
         for ch, chk_widget in self.channel_widgets.items():
             lbl_widget = getattr(self, 'channel_labels', {}).get(ch)
-            if not is_valid_jwt or ch not in subscribed_in_token:
-                chk_widget.state(['disabled'])
-                if lbl_widget:
-                    lbl_widget.configure(foreground="#aaaaaa")
-                self.channel_vars[ch].set(False) # 未購読または無効なトークンならチェックも外す
-            else:
+            
+            # 有効なトークンかつ購読されている場合のみ有効化
+            is_subscribed = is_valid_jwt and ch in subscribed_in_token
+            
+            if is_subscribed:
                 chk_widget.state(['!disabled'])
                 if lbl_widget:
                     lbl_widget.configure(foreground="#555555")
+            else:
+                chk_widget.state(['disabled'])
+                if lbl_widget:
+                    lbl_widget.configure(foreground="#aaaaaa")
+                # トークンが形式的に有効である場合に限り、購読されていないチャンネルのチェックを外す
+                # トークン入力中（一時的に無効な状態）は、ユーザーの選択状態を維持する
+                if is_valid_jwt:
+                    self.channel_vars[ch].set(False)
 
     def save_settings(self):
         new_token = self.token_entry.get().strip()
