@@ -10,7 +10,6 @@ import webbrowser
 import os
 import sys
 import base64
-from tkinter import messagebox
 
 class UIManager:
     def __init__(self, axis_client):
@@ -240,8 +239,7 @@ class UIManager:
 
         self.settings_window = tk.Toplevel(self.root)
         self.settings_window.title("設定 - AXIS Alert Receiver")
-        self.settings_window.geometry("450x350")
-        self.settings_window.resizable(False, False)
+        self.settings_window.minsize(500, 350)
 
         # タブコントロールの作成
         notebook = ttk.Notebook(self.settings_window, takefocus=False)
@@ -280,7 +278,9 @@ class UIManager:
         
         self.channel_vars = {}
         self.channel_widgets = {}
-        channels = ["breaking-news", "jmx-meteorology", "jmx-seismology", "jmx-volcanology", "quake-one", "eew"]
+        self.channel_labels = {}
+        # チャンネルリストを message_formatter から取得するように一元管理化
+        channels = list(message_formatter.CHANNEL_TITLES.keys())
         saved_channels = config.get_channels()
 
         channels_frame = ttk.Frame(tab_channels)
@@ -288,10 +288,30 @@ class UIManager:
         
         for ch in channels:
             var = tk.BooleanVar(value=(ch in saved_channels))
+            
             chk = ttk.Checkbutton(channels_frame, text=ch, variable=var, takefocus=False)
-            chk.pack(anchor='w', pady=2)
+            chk.pack(anchor='w', pady=(5, 0) if ch == channels[0] else (2, 0))
+            
+            # message_formatterから公式のジャンル説明文を取得して改行対応のラベルとして追加
+            genre = getattr(message_formatter, "CHANNEL_DESCRIPTIONS", {}).get(ch, message_formatter.CHANNEL_TITLES.get(ch, ""))
+            if genre:
+                # wraplengthは動的に調整するため、ここでは指定しないか仮値を置く
+                desc_lbl = ttk.Label(channels_frame, text=genre, font=("Helvetica", 8), foreground="#555555")
+                desc_lbl.pack(anchor='w', padx=(20, 0), pady=(0, 5))
+                self.channel_labels[ch] = desc_lbl
+
             self.channel_vars[ch] = var
             self.channel_widgets[ch] = chk
+
+        # レスポンシブな折り返し幅の調整
+        def on_configure(event):
+            # パディングを考慮して折り返し幅を計算
+            new_wraplength = event.width - 60
+            if new_wraplength > 0:
+                for lbl in self.channel_labels.values():
+                    lbl.configure(wraplength=new_wraplength)
+        
+        tab_channels.bind("<Configure>", on_configure)
 
         note_text = "グレーアウトされているチャンネルは、\n設定されているAXISトークンで購読されていません。"
         ttk.Label(tab_channels, text=note_text, font=("Helvetica", 8), foreground="gray").pack(pady=(10, 0), padx=20, anchor='w')
@@ -350,11 +370,23 @@ class UIManager:
                 pass
                 
         for ch, chk_widget in self.channel_widgets.items():
-            if is_valid_jwt and ch not in subscribed_in_token:
-                chk_widget.state(['disabled'])
-                self.channel_vars[ch].set(False) # 未購読ならチェックも外す
-            else:
+            lbl_widget = getattr(self, 'channel_labels', {}).get(ch)
+            
+            # 有効なトークンかつ購読されている場合のみ有効化
+            is_subscribed = is_valid_jwt and ch in subscribed_in_token
+            
+            if is_subscribed:
                 chk_widget.state(['!disabled'])
+                if lbl_widget:
+                    lbl_widget.configure(foreground="#555555")
+            else:
+                chk_widget.state(['disabled'])
+                if lbl_widget:
+                    lbl_widget.configure(foreground="#aaaaaa")
+                # トークンが形式的に有効である場合に限り、購読されていないチャンネルのチェックを外す
+                # トークン入力中（一時的に無効な状態）は、ユーザーの選択状態を維持する
+                if is_valid_jwt:
+                    self.channel_vars[ch].set(False)
 
     def save_settings(self):
         new_token = self.token_entry.get().strip()
@@ -364,13 +396,6 @@ class UIManager:
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.get())
         
-        messagebox.showinfo(
-            "確認", 
-            "設定を保存しました。\n\n"
-            "AXISダッシュボード (https://axis.prioris.jp/manage/channel/) でも、"
-            "ここでチェックを入れたチャンネルを【確実に購読】しているか確認してください。\n"
-            "ダッシュボード側で購読していないチャンネルは、アプリ側でチェックを入れても受信できません。"
-        )
 
         self.client.restart() # 新しいトークンと設定で強制再接続
         if self.settings_window:
