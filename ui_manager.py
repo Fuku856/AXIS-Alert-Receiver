@@ -10,7 +10,6 @@ import webbrowser
 import os
 import sys
 import base64
-from tkinter import messagebox
 
 class UIManager:
     def __init__(self, axis_client):
@@ -378,13 +377,6 @@ class UIManager:
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.get())
         
-        messagebox.showinfo(
-            "確認", 
-            "設定を保存しました。\n\n"
-            "AXISダッシュボード (https://axis.prioris.jp/manage/channel/) でも、"
-            "ここでチェックを入れたチャンネルを【確実に購読】しているか確認してください。\n"
-            "ダッシュボード側で購読していないチャンネルは、アプリ側でチェックを入れても受信できません。"
-        )
 
         self.client.restart() # 新しいトークンと設定で強制再接続
         if self.settings_window:
