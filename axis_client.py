@@ -33,7 +33,7 @@ class AxisClient(threading.Thread):
                 data = response.json()
                 servers = data.get("servers", [])
                 if servers:
-                    return servers[0] # 先頭のサーバを選択
+                    return servers[0] # 先頭のサーバーを選択
                 else:
                     self._set_status("エラー: 利用可能なサーバがありません")
             elif response.status_code == 401:
