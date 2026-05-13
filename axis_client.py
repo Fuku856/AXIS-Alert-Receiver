@@ -45,7 +45,7 @@ class AxisClient(threading.Thread):
         return None
 
     def try_refresh_token(self):
-        # 1日に1回だけ実行する（ポーリング禁止ルール遵守）
+        # 1日に1回だけ実行する（ポーリング禁止ルールを遵守）
         last_refresh = config.get_last_refresh()
         current_time = time.time()
         if current_time - last_refresh < 86400: # 24時間
