@@ -4,6 +4,13 @@ from PIL import Image, ImageDraw
 import ui_manager
 import axis_client
 import sys
+import ctypes
+
+# プロセスのAUMID（AppUserModelID）を設定（トースト通知のアイコン表示とタスクバーのグループ化に必要）
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AXIS Alert Receiver")
+except Exception:
+    pass
 
 def create_image():
     # icon.png があればpystray用のアイコンとして読み込む。なければ動的生成。
@@ -14,7 +21,7 @@ def create_image():
             return sys._MEIPASS
         return os.path.dirname(os.path.abspath(__file__))
 
-    icon_path = os.path.join(get_app_path(), "icon.png")
+    icon_path = os.path.join(get_app_path(), "icon.ico")
     if os.path.exists(icon_path):
         return Image.open(icon_path)
 

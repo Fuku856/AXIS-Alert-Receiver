@@ -27,13 +27,19 @@ class UIManager:
                 return sys._MEIPASS
             return os.path.dirname(os.path.abspath(__file__))
             
-        icon_path = os.path.join(get_app_path(), "icon.png")
-        if os.path.exists(icon_path):
+        icon_path_ico = os.path.join(get_app_path(), "icon.ico")
+        icon_path_png = os.path.join(get_app_path(), "icon.png")
+        if os.path.exists(icon_path_ico):
             try:
-                self.icon_photo = tk.PhotoImage(file=icon_path)
+                self.root.iconbitmap(default=icon_path_ico)
+            except Exception as e:
+                print(f"Failed to load .ico for UI: {e}")
+        elif os.path.exists(icon_path_png):
+            try:
+                self.icon_photo = tk.PhotoImage(file=icon_path_png)
                 self.root.iconphoto(True, self.icon_photo) # Trueで全てのToplevelに適用
             except Exception as e:
-                print(f"Failed to load icon for UI: {e}")
+                print(f"Failed to load .png for UI: {e}")
 
         # ログウィンドウの作成
         self.log_window = tk.Toplevel(self.root)
