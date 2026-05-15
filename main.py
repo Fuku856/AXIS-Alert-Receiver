@@ -6,11 +6,14 @@ import axis_client
 import sys
 import ctypes
 
+APP_ID = "AXIS Alert Receiver"
+
 # プロセスのAUMID（AppUserModelID）を設定（トースト通知のアイコン表示とタスクバーのグループ化に必要）
-try:
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AXIS Alert Receiver")
-except Exception:
-    pass
+if sys.platform == "win32":
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+    except Exception:
+        pass
 
 def create_image():
     # icon.png があればpystray用のアイコンとして読み込む。なければ動的生成。
