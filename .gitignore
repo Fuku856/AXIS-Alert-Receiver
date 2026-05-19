@@ -1,3 +1,6 @@
 # Pythonのキャッシュファイル
 __pycache__/
 *.pyc
+
+# Local configuration files
+config.json

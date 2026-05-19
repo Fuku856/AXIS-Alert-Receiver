@@ -1,10 +1,14 @@
+import os
+import sys
 import threading
+import ctypes
+
 import pystray
 from PIL import Image, ImageDraw
+
 import ui_manager
 import axis_client
-import sys
-import ctypes
+import config
 
 APP_ID = "AXIS Alert Receiver"
 
@@ -17,8 +21,6 @@ if sys.platform == "win32":
 
 def create_image():
     # icon.ico を探す候補パスを定義
-    import os
-    import sys
     
     icon_paths = []
     
@@ -100,7 +102,6 @@ def main():
     threading.Thread(target=icon.run, daemon=True).start()
 
     # 初回起動時にトークンがなければ設定画面を出す
-    import config
     if not config.get_token():
         ui.root.after(500, ui.show_settings_window)
 
