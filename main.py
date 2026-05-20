@@ -41,14 +41,15 @@ def create_image():
     for icon_path in icon_paths:
         if os.path.exists(icon_path):
             try:
-                return Image.open(icon_path)
+                with Image.open(icon_path) as img:
+                    return img.copy()
             except Exception:
                 pass
 
-    # 見つからない場合は動的アイコンを生成 (16x16の青い四角形にAの文字)
-    image = Image.new('RGB', (64, 64), color=(0, 122, 204))
+    # 見つからない場合は動的アイコンを生成 (64x64の青い四角形にAの文字)
+    image = Image.new('RGBA', (64, 64), color=(0, 122, 204, 255))
     dc = ImageDraw.Draw(image)
-    dc.text((20, 20), "A", fill=(255, 255, 255))
+    dc.text((20, 20), "A", fill=(255, 255, 255, 255))
     return image
 
 def setup_tray(ui, client):
