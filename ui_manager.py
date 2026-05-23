@@ -355,8 +355,11 @@ class UIManager:
         credit_lbl = ttk.Label(about_container, text=copyright_text, font=("Helvetica", 10), justify="center", wraplength=420)
         credit_lbl.pack(pady=(0, 20))
 
+        repo_lbl = ttk.Label(about_container, text="Repository:", justify="center")
+        repo_lbl.pack(pady=(0, 2))
+
         repo_url = "https://github.com/Fuku856/AXIS-Alert-Receiver"
-        link_lbl = ttk.Label(about_container, text=f"Repository:\n{repo_url}", foreground="blue", cursor="hand2", justify="center", wraplength=420)
+        link_lbl = ttk.Label(about_container, text=repo_url, foreground="blue", cursor="hand2", justify="center", wraplength=420)
         link_lbl.pack(pady=(0, 20))
         link_lbl.bind("<Button-1>", lambda e: webbrowser.open(repo_url))
 
