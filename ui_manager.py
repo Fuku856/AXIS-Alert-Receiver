@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import scrolledtext, ttk
+from tkinter import scrolledtext, ttk, messagebox
 import config
 from datetime import datetime
 import json
@@ -63,6 +63,7 @@ class UIManager:
         self.settings_window = None
 
         self.is_latest_version = None
+        self._update_info_fetched = False
         self.root.after(1000, lambda: self.start_background_update_checker(is_startup=True))
 
     def append_log(self, channel, message_data):
@@ -271,15 +272,12 @@ class UIManager:
                         
                     notebook = event.widget
                     try:
-                        current_tab = notebook.tab(notebook.select(), "text")
-                        if current_tab == '更新情報':
-                            if hasattr(self, 'latest_version_lbl'):
-                                text = self.latest_version_lbl.cget("text")
-                                if "(未取得)" in text or "取得失敗" in text:
-                                    if config.APP_VERSION.lower() in ("dev", "vdev"):
-                                        self._update_release_info("スキップ", "開発バージョンのため、自動取得をスキップしました。")
-                                    else:
-                                        self.check_for_updates()
+                        if hasattr(self, 'tab_updates') and notebook.select() == str(self.tab_updates):
+                            if not getattr(self, '_update_info_fetched', False):
+                                if config.APP_VERSION.lower() in ("dev", "vdev"):
+                                    self._update_release_info("スキップ", "開発バージョンのため、自動取得をスキップしました。")
+                                else:
+                                    self.check_for_updates()
                     except Exception:
                         pass
             except tk.TclError:
@@ -405,10 +403,10 @@ class UIManager:
         link_lbl.bind("<Button-1>", lambda e: webbrowser.open(config.REPO_URL))
 
         # --- タブ5: 更新情報 ---
-        tab_updates = ttk.Frame(notebook)
-        notebook.add(tab_updates, text='更新情報')
+        self.tab_updates = ttk.Frame(notebook)
+        notebook.add(self.tab_updates, text='更新情報')
 
-        updates_container = ttk.Frame(tab_updates)
+        updates_container = ttk.Frame(self.tab_updates)
         updates_container.pack(expand=True, fill='both', padx=20, pady=20)
 
         current_version_lbl = ttk.Label(updates_container, text=f"現在のバージョン: v{config.APP_VERSION}", font=("Helvetica", 10))
@@ -501,7 +499,6 @@ class UIManager:
     def check_for_updates(self):
         is_dev = config.APP_VERSION.lower() in ("dev", "vdev")
         if is_dev:
-            from tkinter import messagebox
             res = messagebox.askokcancel("警告", "ローカル版（開発版）のため、更新確認時に予期せぬエラーが発生する可能性があります。\n\n続行しますか？", parent=self.settings_window)
             if not res:
                 return
@@ -523,6 +520,9 @@ class UIManager:
         threading.Thread(target=self._fetch_latest_release, args=(True, is_dev), daemon=True).start()
 
     def _update_release_info(self, tag_name, body):
+        if tag_name != "取得失敗":
+            self._update_info_fetched = True
+            
         try:
             if tag_name not in ("取得失敗", "スキップ"):
                 try:
