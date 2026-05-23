@@ -276,7 +276,10 @@ class UIManager:
                             if hasattr(self, 'latest_version_lbl'):
                                 text = self.latest_version_lbl.cget("text")
                                 if "(未取得)" in text or "取得失敗" in text:
-                                    self.check_for_updates()
+                                    if config.APP_VERSION.lower() in ("dev", "vdev"):
+                                        self._update_release_info("スキップ", "開発バージョンのため、自動取得をスキップしました。")
+                                    else:
+                                        self.check_for_updates()
                     except Exception:
                         pass
             except tk.TclError:
@@ -496,6 +499,13 @@ class UIManager:
             self.settings_window = None
 
     def check_for_updates(self):
+        is_dev = config.APP_VERSION.lower() in ("dev", "vdev")
+        if is_dev:
+            from tkinter import messagebox
+            res = messagebox.askokcancel("警告", "ローカル版（開発版）のため、更新確認時に予期せぬエラーが発生する可能性があります。\n\n続行しますか？", parent=self.settings_window)
+            if not res:
+                return
+
         try:
             if hasattr(self, 'check_update_btn') and self.check_update_btn.winfo_exists():
                 self.check_update_btn.state(['disabled'])
@@ -510,29 +520,11 @@ class UIManager:
         except tk.TclError:
             pass
 
-        def fetch_task():
-            try:
-                # config.REPO_URL (例: https://github.com/Fuku856/AXIS-Alert-Receiver) からリポジトリパスを抽出
-                repo_path = "/".join(config.REPO_URL.rstrip('/').split('/')[-2:])
-                url = f"https://api.github.com/repos/{repo_path}/releases/latest"
-                
-                user_agent = f"{getattr(config, 'APP_NAME', 'AXIS-Alert-Receiver')}/{getattr(config, 'APP_VERSION', '1.0')}"
-                req = urllib.request.Request(url, headers={'User-Agent': user_agent})
-                
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    tag_name = data.get("tag_name", "不明")
-                    body = data.get("body", "リリースノートがありません。")
-                    
-                    self.root.after(0, lambda: self._update_release_info(tag_name, body))
-            except Exception as e:
-                self.root.after(0, lambda: self._update_release_info("取得失敗", f"エラーが発生しました:\n{e}"))
-
-        threading.Thread(target=fetch_task, daemon=True).start()
+        threading.Thread(target=self._fetch_latest_release, args=(True, is_dev), daemon=True).start()
 
     def _update_release_info(self, tag_name, body):
         try:
-            if tag_name != "取得失敗":
+            if tag_name not in ("取得失敗", "スキップ"):
                 try:
                     latest_ver = tag_name.lstrip('vV')
                     current_ver = config.APP_VERSION.lstrip('vV')
@@ -684,7 +676,7 @@ class UIManager:
 
     def start_background_update_checker(self, is_startup=False):
         if is_startup and config.get_check_update_on_startup():
-            threading.Thread(target=self.perform_background_update_check, args=("startup",), daemon=True).start()
+            threading.Thread(target=self._fetch_latest_release, args=(False,), daemon=True).start()
         
         # 1時間ごとに定期チェックをスケジュール
         self.root.after(3600000, lambda: self.start_background_update_checker(is_startup=False))
@@ -696,11 +688,16 @@ class UIManager:
                 try:
                     last_check = datetime.fromisoformat(last_check_str) if last_check_str else datetime.min
                     if (datetime.now() - last_check).days >= interval:
-                        threading.Thread(target=self.perform_background_update_check, args=("interval",), daemon=True).start()
+                        threading.Thread(target=self._fetch_latest_release, args=(False,), daemon=True).start()
                 except Exception:
                     pass
 
-    def perform_background_update_check(self, trigger):
+    def _fetch_latest_release(self, is_manual=False, force=False):
+        if config.APP_VERSION.lower() in ("dev", "vdev") and not force:
+            if is_manual:
+                self.root.after(0, lambda: self._update_release_info("スキップ", "開発バージョンのため、最新情報の取得をスキップしました。"))
+            return
+
         try:
             repo_path = "/".join(config.REPO_URL.rstrip('/').split('/')[-2:])
             url = f"https://api.github.com/repos/{repo_path}/releases/latest"
@@ -710,36 +707,26 @@ class UIManager:
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode('utf-8'))
                 tag_name = data.get("tag_name", "不明")
+                body = data.get("body", "リリースノートがありません。")
                 
-                if tag_name != "不明" and tag_name != "取得失敗":
-                    latest_ver = tag_name.lstrip('vV')
-                    current_ver = config.APP_VERSION.lstrip('vV')
-                    
-                    def parse_version(v):
-                        res = []
-                        for x in v.split('.'):
-                            m = re.match(r'\d+', x)
-                            if m:
-                                res.append(int(m.group()))
-                        return res
-                    
-                    is_latest = parse_version(current_ver) >= parse_version(latest_ver)
-                    self.is_latest_version = is_latest
-                    
+                # 自動チェックの場合、最終確認日時を更新
+                if not is_manual:
                     config.set_last_update_check_time(datetime.now().isoformat())
                     
-                    self.root.after(0, self._update_about_tab_version_label)
-                    
-                    if not is_latest:
-                        self.root.after(0, lambda: self.show_update_prompt(tag_name))
+                self.root.after(0, lambda: self._update_release_info(tag_name, body))
         except Exception as e:
-            print(f"Background update check error: {e}")
+            if is_manual:
+                self.root.after(0, lambda: self._update_release_info("取得失敗", f"エラーが発生しました:\n{e}"))
+            else:
+                print(f"Background update check error: {e}")
 
     def _update_about_tab_version_label(self):
         try:
             if hasattr(self, 'about_title_lbl') and self.about_title_lbl.winfo_exists():
                 base_text = f"{config.APP_NAME} v{config.APP_VERSION}"
-                if self.is_latest_version is True:
+                if config.APP_VERSION.lower() in ("dev", "vdev"):
+                    self.about_title_lbl.config(text=base_text + " (開発版)")
+                elif self.is_latest_version is True:
                     self.about_title_lbl.config(text=base_text + " (最新)")
                 elif self.is_latest_version is False:
                     self.about_title_lbl.config(text=base_text + " (アップデートあり)")

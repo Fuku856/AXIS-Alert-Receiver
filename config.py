@@ -22,6 +22,25 @@ def get_config_dir():
     return app_dir
 
 CONFIG_FILE = os.path.join(get_config_dir(), "config.json")
+
+if APP_VERSION.lower() in ("dev", "vdev"):
+    CONFIG_FILE = os.path.abspath("config_dev.json")
+    # 起動時に前回のファイルが残っていればリセット（削除）する
+    if os.path.exists(CONFIG_FILE):
+        try:
+            os.remove(CONFIG_FILE)
+        except Exception:
+            pass
+            
+    import atexit
+    def cleanup_dev_config():
+        if os.path.exists(CONFIG_FILE):
+            try:
+                os.remove(CONFIG_FILE)
+            except Exception:
+                pass
+    atexit.register(cleanup_dev_config)
+
 _config_lock = threading.Lock()
 
 def load_config():
