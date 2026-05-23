@@ -36,7 +36,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config.json,config.example.json,icon.ico,README.md,*.pyc,__pycache__,installer.iss,{#MyAppExeName}"
 Source: "{#MySourceDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -44,3 +44,27 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "https://github.com/Fuku856/AXIS-Alert-Receiver/releases/latest"; Description: "更新情報を表示する"; Flags: shellexec postinstall skipifsilent unchecked
+
+[Code]
+procedure KillApp();
+var
+  ErrorCode: Integer;
+begin
+  // sysディレクトリのtaskkillをフルパスで指定し、アプリ名をダブルクォートで囲む（堅牢性の向上）
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
+end;
+
+// インストール準備完了後、実際のファイルコピーが始まる直前に実行 (UXの改善)
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  KillApp();
+  Result := '';
+end;
+
+// アンインストール開始時に実行
+function InitializeUninstall(): Boolean;
+begin
+  KillApp();
+  Result := True;
+end;
