@@ -477,7 +477,7 @@ class UIManager:
         def fetch_task():
             try:
                 # config.REPO_URL (例: https://github.com/Fuku856/AXIS-Alert-Receiver) からリポジトリパスを抽出
-                repo_path = config.REPO_URL.replace("https://github.com/", "")
+                repo_path = "/".join(config.REPO_URL.rstrip('/').split('/')[-2:])
                 url = f"https://api.github.com/repos/{repo_path}/releases/latest"
                 
                 user_agent = f"{getattr(config, 'APP_NAME', 'AXIS-Alert-Receiver')}/{getattr(config, 'APP_VERSION', '1.0')}"
