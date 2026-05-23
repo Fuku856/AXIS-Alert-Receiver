@@ -59,8 +59,8 @@ jobs:
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ github.event.release.tag_name }}
         files: |
           ${{ env.PACKAGE_NAME }}.zip
           Output/AXIS-Alert-Receiver_Setup_${{ env.VERSION }}.exe
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN }}
