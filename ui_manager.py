@@ -12,6 +12,8 @@ import sys
 import base64
 import urllib.request
 import threading
+import re
+import uuid
 
 class UIManager:
     def __init__(self, axis_client):
@@ -464,9 +466,11 @@ class UIManager:
                 
             self.latest_version_lbl.config(text="最新バージョン: 取得中...")
             self.release_text_area.configure(state='normal')
-            self.release_text_area.delete("1.0", tk.END)
-            self.release_text_area.insert(tk.END, "情報を取得しています...\n")
-            self.release_text_area.configure(state='disabled')
+            try:
+                self.release_text_area.delete("1.0", tk.END)
+                self.release_text_area.insert(tk.END, "情報を取得しています...\n")
+            finally:
+                self.release_text_area.configure(state='disabled')
         except tk.TclError:
             pass
 
@@ -497,14 +501,89 @@ class UIManager:
             
             if hasattr(self, 'release_text_area') and self.release_text_area.winfo_exists():
                 self.release_text_area.configure(state='normal')
-                self.release_text_area.delete("1.0", tk.END)
-                self.release_text_area.insert(tk.END, body)
-                self.release_text_area.configure(state='disabled')
+                try:
+                    self.release_text_area.delete("1.0", tk.END)
+                    self._insert_markdown(self.release_text_area, body)
+                finally:
+                    self.release_text_area.configure(state='disabled')
                 
             if hasattr(self, 'check_update_btn') and self.check_update_btn.winfo_exists():
                 self.check_update_btn.state(['!disabled'])
         except tk.TclError:
             pass
+
+    def _insert_markdown(self, widget, text):
+        widget.tag_configure("h1", font=("Helvetica", 14, "bold"), spacing1=10, spacing3=5)
+        widget.tag_configure("h2", font=("Helvetica", 12, "bold"), spacing1=8, spacing3=4)
+        widget.tag_configure("h3", font=("Helvetica", 10, "bold"), spacing1=5, spacing3=2)
+        widget.tag_configure("bold", font=("Helvetica", 10, "bold"))
+        widget.tag_configure("link", foreground="blue", underline=True)
+
+        lines = text.split('\n')
+        for line in lines:
+            header_match = re.match(r'^(#{1,3})\s+(.*)', line)
+            if header_match:
+                level = len(header_match.group(1))
+                content = header_match.group(2)
+                tag = f"h{level}"
+                self._parse_inline(widget, content, tags=(tag,))
+                widget.insert(tk.END, "\n")
+                continue
+            
+            list_match = re.match(r'^(\s*)[-*]\s+(.*)', line)
+            if list_match:
+                indent = list_match.group(1)
+                content = list_match.group(2)
+                widget.insert(tk.END, indent + "• ", ())
+                self._parse_inline(widget, content, tags=())
+                widget.insert(tk.END, "\n")
+                continue
+                
+            self._parse_inline(widget, line)
+            widget.insert(tk.END, "\n")
+
+    def _parse_inline(self, widget, line, tags=()):
+        pattern = r'(<img[^>]+src="([^"]+)"[^>]*>)|(!\[.*?\]\([^)]+\))|(\[.*?\]\([^)]+\))|(\*\*.*?\*\*)|(https?://[^\s)\]"\']+)'
+        pos = 0
+        for match in re.finditer(pattern, line):
+            start, end = match.span()
+            if pos < start:
+                widget.insert(tk.END, line[pos:start], tags)
+            
+            token = match.group(0)
+            if token.startswith('<img'):
+                img_url = match.group(2)
+                if img_url:
+                    self._insert_link(widget, "image", img_url, tags)
+            elif token.startswith('!['):
+                alt_url = re.match(r'!\[.*?\]\(([^)]+)\)', token)
+                if alt_url:
+                    url = alt_url.group(1)
+                    self._insert_link(widget, "image", url, tags)
+            elif token.startswith('['):
+                txt_url = re.match(r'\[(.*?)\]\(([^)]+)\)', token)
+                if txt_url:
+                    txt = txt_url.group(1)
+                    url = txt_url.group(2)
+                    self._insert_link(widget, txt, url, tags)
+            elif token.startswith('**'):
+                txt = token[2:-2]
+                widget.insert(tk.END, txt, tags + ("bold",))
+            elif token.startswith('http'):
+                self._insert_link(widget, token, token, tags)
+            
+            pos = end
+            
+        if pos < len(line):
+            widget.insert(tk.END, line[pos:], tags)
+
+    def _insert_link(self, widget, label, url, base_tags):
+        tag_name = f"link_{uuid.uuid4().hex}"
+        all_tags = base_tags + ("link", tag_name)
+        widget.insert(tk.END, label, all_tags)
+        widget.tag_bind(tag_name, "<Button-1>", lambda e, u=url: webbrowser.open(u))
+        widget.tag_bind(tag_name, "<Enter>", lambda e: widget.config(cursor="hand2"))
+        widget.tag_bind(tag_name, "<Leave>", lambda e: widget.config(cursor=""))
 
     def mainloop(self):
         self.root.mainloop()
