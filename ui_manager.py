@@ -10,6 +10,8 @@ import webbrowser
 import os
 import sys
 import base64
+import urllib.request
+import threading
 
 class UIManager:
     def __init__(self, axis_client):
@@ -362,6 +364,28 @@ class UIManager:
         link_lbl.pack(pady=(0, 20))
         link_lbl.bind("<Button-1>", lambda e: webbrowser.open(config.REPO_URL))
 
+        # --- タブ5: 更新情報 ---
+        tab_updates = ttk.Frame(notebook)
+        notebook.add(tab_updates, text='更新情報')
+
+        updates_container = ttk.Frame(tab_updates)
+        updates_container.pack(expand=True, fill='both', padx=20, pady=20)
+
+        current_version_lbl = ttk.Label(updates_container, text=f"現在のバージョン: v{config.APP_VERSION}", font=("Helvetica", 10))
+        current_version_lbl.pack(pady=(0, 10), anchor='w')
+
+        self.latest_version_lbl = ttk.Label(updates_container, text="最新バージョン: (未取得)", font=("Helvetica", 10))
+        self.latest_version_lbl.pack(pady=(0, 10), anchor='w')
+
+        check_update_btn = ttk.Button(updates_container, text="最新情報を取得する", command=self.check_for_updates)
+        check_update_btn.pack(pady=(0, 10), anchor='w')
+
+        release_note_lbl = ttk.Label(updates_container, text="リリースノート:", font=("Helvetica", 10))
+        release_note_lbl.pack(pady=(0, 5), anchor='w')
+
+        self.release_text_area = scrolledtext.ScrolledText(updates_container, wrap='word', height=10, state='disabled')
+        self.release_text_area.pack(expand=True, fill='both')
+
         # --- 下部のボタン領域 (常に表示) ---
         btn_frame = ttk.Frame(self.settings_window)
         btn_frame.pack(side='bottom', pady=(0, 10))
@@ -432,6 +456,44 @@ class UIManager:
         if self.settings_window:
             self.settings_window.destroy()
             self.settings_window = None
+
+    def check_for_updates(self):
+        try:
+            self.latest_version_lbl.config(text="最新バージョン: 取得中...")
+            self.release_text_area.configure(state='normal')
+            self.release_text_area.delete("1.0", tk.END)
+            self.release_text_area.insert(tk.END, "情報を取得しています...\n")
+            self.release_text_area.configure(state='disabled')
+        except Exception:
+            pass
+
+        def fetch_task():
+            url = "https://api.github.com/repos/Fuku856/AXIS-Alert-Receiver/releases/latest"
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    tag_name = data.get("tag_name", "不明")
+                    body = data.get("body", "リリースノートがありません。")
+                    
+                    self.root.after(0, lambda: self._update_release_info(tag_name, body))
+            except Exception as e:
+                self.root.after(0, lambda: self._update_release_info("取得失敗", f"エラーが発生しました:\n{e}"))
+
+        threading.Thread(target=fetch_task, daemon=True).start()
+
+    def _update_release_info(self, tag_name, body):
+        try:
+            if hasattr(self, 'latest_version_lbl') and self.latest_version_lbl.winfo_exists():
+                self.latest_version_lbl.config(text=f"最新バージョン: {tag_name}")
+            
+            if hasattr(self, 'release_text_area') and self.release_text_area.winfo_exists():
+                self.release_text_area.configure(state='normal')
+                self.release_text_area.delete("1.0", tk.END)
+                self.release_text_area.insert(tk.END, body)
+                self.release_text_area.configure(state='disabled')
+        except Exception:
+            pass
 
     def mainloop(self):
         self.root.mainloop()
