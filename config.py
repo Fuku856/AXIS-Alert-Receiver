@@ -22,6 +22,25 @@ def get_config_dir():
     return app_dir
 
 CONFIG_FILE = os.path.join(get_config_dir(), "config.json")
+
+if APP_VERSION.lower() in ("dev", "vdev"):
+    CONFIG_FILE = os.path.abspath("config_dev.json")
+    # 起動時に前回のファイルが残っていればリセット（削除）する
+    if os.path.exists(CONFIG_FILE):
+        try:
+            os.remove(CONFIG_FILE)
+        except Exception:
+            pass
+            
+    import atexit
+    def cleanup_dev_config():
+        if os.path.exists(CONFIG_FILE):
+            try:
+                os.remove(CONFIG_FILE)
+            except Exception:
+                pass
+    atexit.register(cleanup_dev_config)
+
 _config_lock = threading.Lock()
 
 def load_config():
@@ -96,4 +115,28 @@ def get_show_popup():
 def set_show_popup(show):
     config = load_config()
     config["show_popup"] = show
+    save_config(config)
+
+def get_check_update_on_startup():
+    return load_config().get("check_update_on_startup", True)
+
+def set_check_update_on_startup(check):
+    config = load_config()
+    config["check_update_on_startup"] = check
+    save_config(config)
+
+def get_auto_update_interval_days():
+    return load_config().get("auto_update_interval_days", 1)
+
+def set_auto_update_interval_days(days):
+    config = load_config()
+    config["auto_update_interval_days"] = days
+    save_config(config)
+
+def get_last_update_check_time():
+    return load_config().get("last_update_check_time", "")
+
+def set_last_update_check_time(time_str):
+    config = load_config()
+    config["last_update_check_time"] = time_str
     save_config(config)
