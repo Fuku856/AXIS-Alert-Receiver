@@ -502,7 +502,12 @@ class UIManager:
                     current_ver = config.APP_VERSION.lstrip('vV')
                     
                     def parse_version(v):
-                        return [int(x) for x in v.split('.') if x.isdigit()]
+                        res = []
+                        for x in v.split('.'):
+                            m = re.match(r'\d+', x)
+                            if m:
+                                res.append(int(m.group()))
+                        return res
                     
                     if parse_version(latest_ver) > parse_version(current_ver):
                         self.show_update_prompt(tag_name)
