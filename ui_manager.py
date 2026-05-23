@@ -47,7 +47,7 @@ class UIManager:
 
         # ログウィンドウの作成
         self.log_window = tk.Toplevel(self.root)
-        self.log_window.title("AXIS Alert Receiver - ログ")
+        self.log_window.title(f"{config.APP_NAME} - ログ")
         self.log_window.geometry("600x400")
         self.log_window.protocol("WM_DELETE_WINDOW", self.hide_log_window)
         self.log_window.withdraw() # 初期は非表示
@@ -248,7 +248,7 @@ class UIManager:
             return
 
         self.settings_window = tk.Toplevel(self.root)
-        self.settings_window.title("設定 - AXIS Alert Receiver")
+        self.settings_window.title(f"設定 - {config.APP_NAME}")
         self.settings_window.minsize(500, 350)
 
         # タブコントロールの作成
@@ -340,6 +340,27 @@ class UIManager:
         self.token_entry.bind("<KeyRelease>", self.update_checkboxes_state)
         # 初期状態の反映
         self.update_checkboxes_state()
+
+        # --- タブ4: アプリについて ---
+        tab_about = ttk.Frame(notebook)
+        notebook.add(tab_about, text='アプリについて')
+
+        about_container = ttk.Frame(tab_about)
+        about_container.pack(expand=True, fill='both', padx=20, pady=20)
+
+        title_lbl = ttk.Label(about_container, text=f"{config.APP_NAME} v{config.APP_VERSION}", font=("Helvetica", 14, "bold"), justify="center", wraplength=420)
+        title_lbl.pack(pady=(10, 5))
+
+        copyright_text = "© 2026 Fuku856 All rights reserved.\nCreated by Fuku856\nLicense: MIT License"
+        credit_lbl = ttk.Label(about_container, text=copyright_text, font=("Helvetica", 10), justify="center", wraplength=420)
+        credit_lbl.pack(pady=(0, 20))
+
+        repo_lbl = ttk.Label(about_container, text="Repository:", justify="center")
+        repo_lbl.pack(pady=(0, 2))
+
+        link_lbl = ttk.Label(about_container, text=config.REPO_URL, foreground="blue", cursor="hand2", justify="center", wraplength=420)
+        link_lbl.pack(pady=(0, 20))
+        link_lbl.bind("<Button-1>", lambda e: webbrowser.open(config.REPO_URL))
 
         # --- 下部のボタン領域 (常に表示) ---
         btn_frame = ttk.Frame(self.settings_window)

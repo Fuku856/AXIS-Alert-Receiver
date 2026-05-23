@@ -9,6 +9,9 @@ try:
 except ImportError:
     win32crypt = None
 
+APP_NAME = "AXIS Alert Receiver"
+APP_VERSION = "1.1.4"
+REPO_URL = "https://github.com/Fuku856/AXIS-Alert-Receiver"
 def get_config_dir():
     app_data = os.environ.get('APPDATA')
     if not app_data:
