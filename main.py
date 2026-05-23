@@ -10,7 +10,7 @@ import ui_manager
 import axis_client
 import config
 
-APP_ID = "AXIS Alert Receiver"
+APP_ID = config.APP_NAME
 
 # プロセスのAUMID（AppUserModelID）を設定（トースト通知のアイコン表示とタスクバーのグループ化に必要）
 if sys.platform == "win32":
@@ -70,7 +70,7 @@ def setup_tray(ui, client):
         pystray.MenuItem("終了", on_quit)
     )
 
-    icon = pystray.Icon("AXIS-Alert-Receiver", create_image(), "AXIS Alert Receiver", menu)
+    icon = pystray.Icon("AXIS-Alert-Receiver", create_image(), config.APP_NAME, menu)
     return icon
 
 def main():
