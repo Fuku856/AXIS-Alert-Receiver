@@ -62,6 +62,9 @@ class UIManager:
         # 設定ダイアログの作成
         self.settings_window = None
 
+        self.is_latest_version = None
+        self.root.after(1000, lambda: self.start_background_update_checker(is_startup=True))
+
     def append_log(self, channel, message_data):
         def _update():
             self.text_area.configure(state='normal')
@@ -265,6 +268,17 @@ class UIManager:
                     self.settings_window.focus_set()
                     if hasattr(self, 'token_entry') and self.token_entry.winfo_exists():
                         self.token_entry.select_clear()
+                        
+                    notebook = event.widget
+                    try:
+                        current_tab = notebook.tab(notebook.select(), "text")
+                        if current_tab == '更新情報':
+                            if hasattr(self, 'latest_version_lbl'):
+                                text = self.latest_version_lbl.cget("text")
+                                if "(未取得)" in text or "取得失敗" in text:
+                                    self.check_for_updates()
+                    except Exception:
+                        pass
             except tk.TclError:
                 pass
             except Exception:
@@ -340,6 +354,26 @@ class UIManager:
         popup_chk = ttk.Checkbutton(tab_ui, text="受信時にポップアップウィンドウを表示する", variable=self.show_popup_var, takefocus=False)
         popup_chk.pack(pady=5, padx=20, anchor='w')
 
+        ttk.Label(tab_ui, text="更新設定:").pack(pady=(15, 5), padx=10, anchor='w')
+        
+        self.check_startup_var = tk.BooleanVar(value=config.get_check_update_on_startup())
+        startup_chk = ttk.Checkbutton(tab_ui, text="起動時に最新バージョンの更新を確認する", variable=self.check_startup_var, takefocus=False)
+        startup_chk.pack(pady=5, padx=20, anchor='w')
+
+        interval_frame = ttk.Frame(tab_ui)
+        interval_frame.pack(pady=5, padx=20, anchor='w')
+        ttk.Label(interval_frame, text="定期的に更新を確認する間隔:").pack(side='left', padx=(0, 10))
+        
+        self.interval_var = tk.StringVar()
+        interval_options = {"確認しない": 0, "1日おき": 1, "3日おき": 3, "7日おき": 7, "30日おき": 30}
+        current_interval = config.get_auto_update_interval_days()
+        current_text = next((k for k, v in interval_options.items() if v == current_interval), "1日おき")
+        self.interval_var.set(current_text)
+        
+        interval_combo = ttk.Combobox(interval_frame, textvariable=self.interval_var, values=list(interval_options.keys()), state="readonly", width=10)
+        interval_combo.pack(side='left')
+        self.interval_options = interval_options
+
         # トークン入力時にリアルタイムでチェックボックスの状態を更新する
         self.token_entry.bind("<KeyRelease>", self.update_checkboxes_state)
         # 初期状態の反映
@@ -352,8 +386,9 @@ class UIManager:
         about_container = ttk.Frame(tab_about)
         about_container.pack(expand=True, fill='both', padx=20, pady=20)
 
-        title_lbl = ttk.Label(about_container, text=f"{config.APP_NAME} v{config.APP_VERSION}", font=("Helvetica", 14, "bold"), justify="center", wraplength=420)
-        title_lbl.pack(pady=(10, 5))
+        self.about_title_lbl = ttk.Label(about_container, text=f"{config.APP_NAME} v{config.APP_VERSION}", font=("Helvetica", 14, "bold"), justify="center", wraplength=420)
+        self.about_title_lbl.pack(pady=(10, 5))
+        self._update_about_tab_version_label()
 
         copyright_text = "© 2026 Fuku856 All rights reserved.\nCreated by Fuku856\nLicense: MIT License"
         credit_lbl = ttk.Label(about_container, text=copyright_text, font=("Helvetica", 10), justify="center", wraplength=420)
@@ -452,8 +487,9 @@ class UIManager:
         config.set_channels(selected_channels)
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.get())
+        config.set_check_update_on_startup(self.check_startup_var.get())
+        config.set_auto_update_interval_days(self.interval_options[self.interval_var.get()])
         
-
         self.client.restart() # 新しいトークンと設定で強制再接続
         if self.settings_window:
             self.settings_window.destroy()
@@ -509,7 +545,11 @@ class UIManager:
                                 res.append(int(m.group()))
                         return res
                     
-                    if parse_version(latest_ver) > parse_version(current_ver):
+                    is_latest = parse_version(current_ver) >= parse_version(latest_ver)
+                    self.is_latest_version = is_latest
+                    self._update_about_tab_version_label()
+                    
+                    if not is_latest:
                         self.show_update_prompt(tag_name)
                 except Exception as e:
                     print(f"Version comparison error: {e}")
@@ -641,6 +681,72 @@ class UIManager:
         widget.tag_bind(tag_name, "<Button-1>", lambda e, u=url: webbrowser.open(u))
         widget.tag_bind(tag_name, "<Enter>", lambda e: widget.config(cursor="hand2"))
         widget.tag_bind(tag_name, "<Leave>", lambda e: widget.config(cursor=""))
+
+    def start_background_update_checker(self, is_startup=False):
+        if is_startup and config.get_check_update_on_startup():
+            threading.Thread(target=self.perform_background_update_check, args=("startup",), daemon=True).start()
+        
+        # 1時間ごとに定期チェックをスケジュール
+        self.root.after(3600000, lambda: self.start_background_update_checker(is_startup=False))
+        
+        if not is_startup:
+            interval = config.get_auto_update_interval_days()
+            if interval > 0:
+                last_check_str = config.get_last_update_check_time()
+                try:
+                    last_check = datetime.fromisoformat(last_check_str) if last_check_str else datetime.min
+                    if (datetime.now() - last_check).days >= interval:
+                        threading.Thread(target=self.perform_background_update_check, args=("interval",), daemon=True).start()
+                except Exception:
+                    pass
+
+    def perform_background_update_check(self, trigger):
+        try:
+            repo_path = "/".join(config.REPO_URL.rstrip('/').split('/')[-2:])
+            url = f"https://api.github.com/repos/{repo_path}/releases/latest"
+            user_agent = f"{getattr(config, 'APP_NAME', 'AXIS-Alert-Receiver')}/{getattr(config, 'APP_VERSION', '1.0')}"
+            req = urllib.request.Request(url, headers={'User-Agent': user_agent})
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                tag_name = data.get("tag_name", "不明")
+                
+                if tag_name != "不明" and tag_name != "取得失敗":
+                    latest_ver = tag_name.lstrip('vV')
+                    current_ver = config.APP_VERSION.lstrip('vV')
+                    
+                    def parse_version(v):
+                        res = []
+                        for x in v.split('.'):
+                            m = re.match(r'\d+', x)
+                            if m:
+                                res.append(int(m.group()))
+                        return res
+                    
+                    is_latest = parse_version(current_ver) >= parse_version(latest_ver)
+                    self.is_latest_version = is_latest
+                    
+                    config.set_last_update_check_time(datetime.now().isoformat())
+                    
+                    self.root.after(0, self._update_about_tab_version_label)
+                    
+                    if not is_latest:
+                        self.root.after(0, lambda: self.show_update_prompt(tag_name))
+        except Exception as e:
+            print(f"Background update check error: {e}")
+
+    def _update_about_tab_version_label(self):
+        try:
+            if hasattr(self, 'about_title_lbl') and self.about_title_lbl.winfo_exists():
+                base_text = f"{config.APP_NAME} v{config.APP_VERSION}"
+                if self.is_latest_version is True:
+                    self.about_title_lbl.config(text=base_text + " (最新)")
+                elif self.is_latest_version is False:
+                    self.about_title_lbl.config(text=base_text + " (アップデートあり)")
+                else:
+                    self.about_title_lbl.config(text=base_text)
+        except Exception:
+            pass
 
     def mainloop(self):
         self.root.mainloop()

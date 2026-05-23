@@ -97,3 +97,27 @@ def set_show_popup(show):
     config = load_config()
     config["show_popup"] = show
     save_config(config)
+
+def get_check_update_on_startup():
+    return load_config().get("check_update_on_startup", True)
+
+def set_check_update_on_startup(check):
+    config = load_config()
+    config["check_update_on_startup"] = check
+    save_config(config)
+
+def get_auto_update_interval_days():
+    return load_config().get("auto_update_interval_days", 1)
+
+def set_auto_update_interval_days(days):
+    config = load_config()
+    config["auto_update_interval_days"] = days
+    save_config(config)
+
+def get_last_update_check_time():
+    return load_config().get("last_update_check_time", "")
+
+def set_last_update_check_time(time_str):
+    config = load_config()
+    config["last_update_check_time"] = time_str
+    save_config(config)
