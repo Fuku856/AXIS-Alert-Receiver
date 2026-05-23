@@ -1,0 +1,10 @@
+{
+    "access_token": "",
+    "last_refresh_time": 0,
+    "channels": [
+        "breaking-news",
+        "jmx-seismology",
+        "eew"
+    ],
+    "show_popup": true
+}

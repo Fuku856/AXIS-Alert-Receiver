@@ -1,10 +1,14 @@
+import os
+import sys
 import threading
+import ctypes
+
 import pystray
 from PIL import Image, ImageDraw
+
 import ui_manager
 import axis_client
-import sys
-import ctypes
+import config
 
 APP_ID = "AXIS Alert Receiver"
 
@@ -16,22 +20,36 @@ if sys.platform == "win32":
         pass
 
 def create_image():
-    # icon.png があればpystray用のアイコンとして読み込む。なければ動的生成。
-    import os
-    def get_app_path():
-        import sys
-        if getattr(sys, 'frozen', False):
-            return sys._MEIPASS
-        return os.path.dirname(os.path.abspath(__file__))
+    # icon.ico を探す候補パスを定義
+    
+    icon_paths = []
+    
+    if getattr(sys, 'frozen', False):
+        # 1. 実行可能ファイルと同じディレクトリ (インストーラーで {app} に配置されたものなど)
+        exe_dir = os.path.dirname(sys.executable)
+        icon_paths.append(os.path.join(exe_dir, "icon.ico"))
+        
+        # 2. PyInstallerの一時展開先ディレクトリ (sys._MEIPASS)
+        if hasattr(sys, '_MEIPASS'):
+            icon_paths.append(os.path.join(sys._MEIPASS, 'icon.ico'))
+    else:
+        # 3. 開発環境 (スクリプトと同じディレクトリ)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_paths.append(os.path.join(script_dir, "icon.ico"))
+    
+    # 最初に見つかった有効なアイコンを読み込む
+    for icon_path in icon_paths:
+        if os.path.exists(icon_path):
+            try:
+                with Image.open(icon_path) as img:
+                    return img.copy()
+            except Exception:
+                pass
 
-    icon_path = os.path.join(get_app_path(), "icon.ico")
-    if os.path.exists(icon_path):
-        return Image.open(icon_path)
-
-    # 見つからない場合は動的アイコンを生成 (16x16の青い四角形にAの文字)
-    image = Image.new('RGB', (64, 64), color=(0, 122, 204))
+    # 見つからない場合は動的アイコンを生成 (64x64の青い四角形にAの文字)
+    image = Image.new('RGBA', (64, 64), color=(0, 122, 204, 255))
     dc = ImageDraw.Draw(image)
-    dc.text((20, 20), "A", fill=(255, 255, 255))
+    dc.text((20, 20), "A", fill=(255, 255, 255, 255))
     return image
 
 def setup_tray(ui, client):
@@ -85,7 +103,6 @@ def main():
     threading.Thread(target=icon.run, daemon=True).start()
 
     # 初回起動時にトークンがなければ設定画面を出す
-    import config
     if not config.get_token():
         ui.root.after(500, ui.show_settings_window)
 
