@@ -341,6 +341,25 @@ class UIManager:
         # 初期状態の反映
         self.update_checkboxes_state()
 
+        # --- タブ4: アプリについて ---
+        tab_about = ttk.Frame(notebook)
+        notebook.add(tab_about, text='アプリについて')
+
+        about_container = ttk.Frame(tab_about)
+        about_container.pack(expand=True, fill='both', padx=20, pady=20)
+
+        title_lbl = ttk.Label(about_container, text=f"AXIS Alert Receiver v{getattr(config, 'APP_VERSION', '1.0.0')}", font=("Helvetica", 14, "bold"), justify="center", wraplength=420)
+        title_lbl.pack(pady=(10, 5))
+
+        copyright_text = "© 2026 Fuku856 All rights reserved.\nCreated by Fuku856\nLicense: MIT License"
+        credit_lbl = ttk.Label(about_container, text=copyright_text, font=("Helvetica", 10), justify="center", wraplength=420)
+        credit_lbl.pack(pady=(0, 20))
+
+        repo_url = "https://github.com/Fuku856/AXIS-Alert-Receiver"
+        link_lbl = ttk.Label(about_container, text=f"Repository:\n{repo_url}", foreground="blue", cursor="hand2", justify="center", wraplength=420)
+        link_lbl.pack(pady=(0, 20))
+        link_lbl.bind("<Button-1>", lambda e: webbrowser.open(repo_url))
+
         # --- 下部のボタン領域 (常に表示) ---
         btn_frame = ttk.Frame(self.settings_window)
         btn_frame.pack(side='bottom', pady=(0, 10))

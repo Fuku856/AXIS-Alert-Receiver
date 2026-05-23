@@ -9,6 +9,8 @@ try:
 except ImportError:
     win32crypt = None
 
+APP_VERSION = "1.1.4"
+
 def get_config_dir():
     app_data = os.environ.get('APPDATA')
     if not app_data:
