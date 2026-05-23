@@ -496,6 +496,19 @@ class UIManager:
 
     def _update_release_info(self, tag_name, body):
         try:
+            if tag_name != "取得失敗":
+                try:
+                    latest_ver = tag_name.lstrip('vV')
+                    current_ver = config.APP_VERSION.lstrip('vV')
+                    
+                    def parse_version(v):
+                        return [int(x) for x in v.split('.') if x.isdigit()]
+                    
+                    if parse_version(latest_ver) > parse_version(current_ver):
+                        self.show_update_prompt(tag_name)
+                except Exception as e:
+                    print(f"Version comparison error: {e}")
+
             if hasattr(self, 'latest_version_lbl') and self.latest_version_lbl.winfo_exists():
                 self.latest_version_lbl.config(text=f"最新バージョン: {tag_name}")
             
@@ -511,6 +524,45 @@ class UIManager:
                 self.check_update_btn.state(['!disabled'])
         except tk.TclError:
             pass
+
+    def show_update_prompt(self, tag_name):
+        prompt = tk.Toplevel(self.root)
+        prompt.title("アップデート通知")
+        prompt.attributes("-topmost", True)
+        prompt.resizable(False, False)
+        
+        prompt.update_idletasks()
+        width = 350
+        height = 130
+        
+        parent = self.settings_window if self.settings_window and self.settings_window.winfo_exists() else None
+        if parent:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (width // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (height // 2)
+        else:
+            x = (prompt.winfo_screenwidth() // 2) - (width // 2)
+            y = (prompt.winfo_screenheight() // 2) - (height // 2)
+            
+        prompt.geometry(f"{width}x{height}+{x}+{y}")
+
+        msg = ttk.Label(prompt, text=f"新しいバージョン ({tag_name}) が利用可能です。\n更新しますか？", justify="center", font=("Helvetica", 10))
+        msg.pack(pady=20)
+        
+        btn_frame = ttk.Frame(prompt)
+        btn_frame.pack(pady=5)
+        
+        def open_release():
+            repo_url = config.REPO_URL.rstrip('/')
+            webbrowser.open(f"{repo_url}/releases/latest")
+            prompt.destroy()
+            
+        open_btn = ttk.Button(btn_frame, text="リリースページを開く", command=open_release)
+        open_btn.pack(side="left", padx=10)
+        
+        cancel_btn = ttk.Button(btn_frame, text="後で", command=prompt.destroy)
+        cancel_btn.pack(side="left", padx=10)
+        
+        prompt.focus_set()
 
     def _insert_markdown(self, widget, text):
         widget.tag_configure("h1", font=("Helvetica", 14, "bold"), spacing1=10, spacing3=5)
