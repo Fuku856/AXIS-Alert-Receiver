@@ -24,7 +24,11 @@ class UIManager:
         # アプリアイコンの設定
         def get_app_path():
             if getattr(sys, 'frozen', False):
-                return sys._MEIPASS
+                exe_dir = os.path.dirname(sys.executable)
+                if os.path.exists(os.path.join(exe_dir, "icon.ico")) or os.path.exists(os.path.join(exe_dir, "icon.png")):
+                    return exe_dir
+                if hasattr(sys, '_MEIPASS'):
+                    return sys._MEIPASS
             return os.path.dirname(os.path.abspath(__file__))
             
         icon_path_ico = os.path.join(get_app_path(), "icon.ico")

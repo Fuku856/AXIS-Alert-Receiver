@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import threading
 import base64
 
@@ -8,7 +9,16 @@ try:
 except ImportError:
     win32crypt = None
 
-CONFIG_FILE = "config.json"
+def get_config_dir():
+    app_data = os.environ.get('APPDATA')
+    if not app_data:
+        app_data = os.path.expanduser('~')
+    app_dir = os.path.join(app_data, 'AXIS-Alert-Receiver')
+    if not os.path.exists(app_dir):
+        os.makedirs(app_dir)
+    return app_dir
+
+CONFIG_FILE = os.path.join(get_config_dir(), "config.json")
 _config_lock = threading.Lock()
 
 def load_config():
