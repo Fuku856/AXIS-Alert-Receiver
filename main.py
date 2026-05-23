@@ -4,7 +4,7 @@ import threading
 import ctypes
 
 import pystray
-from PIL import Image, ImageDraw, UnidentifiedImageError
+from PIL import Image, ImageDraw
 
 import ui_manager
 import axis_client
@@ -43,7 +43,7 @@ def create_image():
             try:
                 with Image.open(icon_path) as img:
                     return img.copy()
-            except (UnidentifiedImageError, OSError):
+            except Exception:
                 pass
 
     # 見つからない場合は動的アイコンを生成 (64x64の青い四角形にAの文字)
