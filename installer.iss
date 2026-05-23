@@ -7,7 +7,7 @@
 #endif
 
 #ifndef MySourceDir
-  #define MySourceDir "."
+  #define MySourceDir "dist\AXIS-Alert-Receiver"
 #endif
 
 [Setup]
@@ -33,9 +33,9 @@ Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "{#MySourceDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MySourceDir}\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MySourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
