@@ -377,8 +377,8 @@ class UIManager:
         self.latest_version_lbl = ttk.Label(updates_container, text="最新バージョン: (未取得)", font=("Helvetica", 10))
         self.latest_version_lbl.pack(pady=(0, 10), anchor='w')
 
-        check_update_btn = ttk.Button(updates_container, text="最新情報を取得する", command=self.check_for_updates)
-        check_update_btn.pack(pady=(0, 10), anchor='w')
+        self.check_update_btn = ttk.Button(updates_container, text="最新情報を取得する", command=self.check_for_updates)
+        self.check_update_btn.pack(pady=(0, 10), anchor='w')
 
         release_note_lbl = ttk.Label(updates_container, text="リリースノート:", font=("Helvetica", 10))
         release_note_lbl.pack(pady=(0, 5), anchor='w')
@@ -459,18 +459,26 @@ class UIManager:
 
     def check_for_updates(self):
         try:
+            if hasattr(self, 'check_update_btn') and self.check_update_btn.winfo_exists():
+                self.check_update_btn.state(['disabled'])
+                
             self.latest_version_lbl.config(text="最新バージョン: 取得中...")
             self.release_text_area.configure(state='normal')
             self.release_text_area.delete("1.0", tk.END)
             self.release_text_area.insert(tk.END, "情報を取得しています...\n")
             self.release_text_area.configure(state='disabled')
-        except Exception:
+        except tk.TclError:
             pass
 
         def fetch_task():
-            url = "https://api.github.com/repos/Fuku856/AXIS-Alert-Receiver/releases/latest"
             try:
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                # config.REPO_URL (例: https://github.com/Fuku856/AXIS-Alert-Receiver) からリポジトリパスを抽出
+                repo_path = config.REPO_URL.replace("https://github.com/", "")
+                url = f"https://api.github.com/repos/{repo_path}/releases/latest"
+                
+                user_agent = f"{getattr(config, 'APP_NAME', 'AXIS-Alert-Receiver')}/{getattr(config, 'APP_VERSION', '1.0')}"
+                req = urllib.request.Request(url, headers={'User-Agent': user_agent})
+                
                 with urllib.request.urlopen(req, timeout=10) as response:
                     data = json.loads(response.read().decode('utf-8'))
                     tag_name = data.get("tag_name", "不明")
@@ -492,7 +500,10 @@ class UIManager:
                 self.release_text_area.delete("1.0", tk.END)
                 self.release_text_area.insert(tk.END, body)
                 self.release_text_area.configure(state='disabled')
-        except Exception:
+                
+            if hasattr(self, 'check_update_btn') and self.check_update_btn.winfo_exists():
+                self.check_update_btn.state(['!disabled'])
+        except tk.TclError:
             pass
 
     def mainloop(self):
