@@ -47,22 +47,24 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "https://github.com/Fuku856/AXIS-Alert-Receiver/releases/latest"; Description: "更新情報を表示する"; Flags: shellexec postinstall skipifsilent unchecked
 
 [Code]
-// インストール開始時に実行
-function InitializeSetup(): Boolean;
+procedure KillApp();
 var
   ErrorCode: Integer;
 begin
-  // アプリケーションが起動中の場合は強制終了する
-  Exec('taskkill.exe', '/f /im {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
-  Result := True;
+  // sysディレクトリのtaskkillをフルパスで指定し、アプリ名をダブルクォートで囲む（堅牢性の向上）
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
+end;
+
+// インストール準備完了後、実際のファイルコピーが始まる直前に実行 (UXの改善)
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  KillApp();
+  Result := '';
 end;
 
 // アンインストール開始時に実行
 function InitializeUninstall(): Boolean;
-var
-  ErrorCode: Integer;
 begin
-  // アプリケーションが起動中の場合は強制終了する
-  Exec('taskkill.exe', '/f /im {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
+  KillApp();
   Result := True;
 end;
