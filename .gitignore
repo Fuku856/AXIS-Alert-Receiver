@@ -5,3 +5,12 @@ __pycache__/
 # Local configuration files
 config.json
 config_dev.json
+config_test.json
+
+# Build and environment directories
+build/
+dist/
+*.spec
+.venv/
+.env
+
