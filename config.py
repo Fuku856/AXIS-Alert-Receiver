@@ -140,3 +140,12 @@ def set_last_update_check_time(time_str):
     config = load_config()
     config["last_update_check_time"] = time_str
     save_config(config)
+
+def get_auto_open_log():
+    return load_config().get("auto_open_log", False)
+
+def set_auto_open_log(auto_open):
+    config = load_config()
+    config["auto_open_log"] = auto_open
+    save_config(config)
+
