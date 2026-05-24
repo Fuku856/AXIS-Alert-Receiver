@@ -94,7 +94,8 @@ class UIManager:
                 notifier.show_toast(title, f"新しい情報を受信しました\n受信: {timestamp}", url)
                 
                 # 自動的にログウィンドウを表示
-                self.show_log_window()
+                if config.get_auto_open_log():
+                    self.show_log_window()
                 
                 # さらに目立つように専用のポップアップも出す
                 if config.get_show_popup():
@@ -355,6 +356,10 @@ class UIManager:
         popup_chk = ttk.Checkbutton(tab_ui, text="受信時にポップアップウィンドウを表示する", variable=self.show_popup_var, takefocus=False)
         popup_chk.pack(pady=5, padx=20, anchor='w')
 
+        self.auto_open_log_var = tk.BooleanVar(value=config.get_auto_open_log())
+        auto_open_log_chk = ttk.Checkbutton(tab_ui, text="受信時にログ画面を自動表示する", variable=self.auto_open_log_var, takefocus=False)
+        auto_open_log_chk.pack(pady=5, padx=20, anchor='w')
+
         ttk.Label(tab_ui, text="更新設定:").pack(pady=(15, 5), padx=10, anchor='w')
         
         self.check_startup_var = tk.BooleanVar(value=config.get_check_update_on_startup())
@@ -488,6 +493,7 @@ class UIManager:
         config.set_channels(selected_channels)
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.get())
+        config.set_auto_open_log(self.auto_open_log_var.get())
         config.set_check_update_on_startup(self.check_startup_var.get())
         config.set_auto_update_interval_days(self.interval_options[self.interval_var.get()])
         
