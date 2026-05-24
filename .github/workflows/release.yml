@@ -25,6 +25,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Inject Version into config.py
+      run: |
+        $VERSION = "${{ github.event.release.tag_name }}"
+        $VERSION = $VERSION.TrimStart('v')
+        (Get-Content config.py) -replace 'APP_VERSION = ".*"', "APP_VERSION = `"$VERSION`"" | Set-Content config.py
+
     - name: Build executable
       run: |
         pyinstaller --noconfirm --onedir --windowed --hidden-import=win32crypt --add-data "icon.ico;." --icon "icon.ico" --name "AXIS-Alert-Receiver" main.py

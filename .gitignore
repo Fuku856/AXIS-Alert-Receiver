@@ -4,3 +4,4 @@ __pycache__/
 
 # Local configuration files
 config.json
+config_dev.json
