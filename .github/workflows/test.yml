@@ -11,6 +11,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      VERSION: ''
+      PACKAGE_NAME: ''
 
     steps:
     - name: Checkout code
@@ -20,13 +23,31 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        cache: 'pip'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pyinstaller
 
-    - name: Test Build executable
+    - name: Test Inject Version into config.py
+      run: |
+        $VERSION = "0.0.0-test"
+        (Get-Content config.py) -replace 'APP_VERSION = ".*"', "APP_VERSION = `"$VERSION`"" | Set-Content config.py
+
+    - name: Build executable
       run: |
         pyinstaller --noconfirm --onedir --windowed --hidden-import=win32crypt --add-data "icon.ico;." --icon "icon.ico" --name "AXIS-Alert-Receiver" main.py
+
+    - name: Test Create Portable Zip
+      run: |
+        $VERSION = "0.0.0-test"
+        $PACKAGE_NAME = "AXIS-Alert-Receiver_portable_${VERSION}"
+        Rename-Item -Path "dist\AXIS-Alert-Receiver" -NewName $PACKAGE_NAME
+        Compress-Archive -Path "dist\${PACKAGE_NAME}" -DestinationPath "${PACKAGE_NAME}.zip"
+        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $env:GITHUB_ENV
+        echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+
+    - name: Test Build Installer
+      run: |
+        iscc.exe "/DMyAppVersion=$env:VERSION" "/DMySourceDir=dist\$env:PACKAGE_NAME" installer.iss
