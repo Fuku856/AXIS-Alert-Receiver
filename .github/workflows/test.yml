@@ -11,6 +11,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      VERSION: ''
+      PACKAGE_NAME: ''
 
     steps:
     - name: Checkout code
@@ -47,4 +50,4 @@ jobs:
 
     - name: Test Build Installer
       run: |
-        iscc.exe "/DMyAppVersion=${{ env.VERSION }}" "/DMySourceDir=dist\${{ env.PACKAGE_NAME }}" installer.iss
+        iscc.exe "/DMyAppVersion=$env:VERSION" "/DMySourceDir=dist\$env:PACKAGE_NAME" installer.iss

@@ -9,6 +9,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      VERSION: ''
+      PACKAGE_NAME: ''
 
     steps:
     - name: Checkout code
@@ -54,7 +57,7 @@ jobs:
     - name: Build Installer
       run: |
         # ISCC (Inno Setup Compiler) is pre-installed on windows-latest runner
-        iscc.exe "/DMyAppVersion=${{ env.VERSION }}" "/DMySourceDir=dist\${{ env.PACKAGE_NAME }}" installer.iss
+        iscc.exe "/DMyAppVersion=$env:VERSION" "/DMySourceDir=dist\$env:PACKAGE_NAME" installer.iss
 
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v2
