@@ -302,7 +302,7 @@ class UIManager:
 
         # --- タブ2: チャンネル設定 ---
         tab_channels = ttk.Frame(notebook)
-        notebook.add(tab_channels, text='チャンネル')
+        notebook.add(tab_channels, text='チャンネル設定')
 
         ttk.Label(tab_channels, text="受信するチャンネル:").pack(pady=(15, 5), padx=10, anchor='w')
         
