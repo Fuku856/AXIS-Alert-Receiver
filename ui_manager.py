@@ -61,8 +61,8 @@ class PopupManager(QObject):
 
         toast = ToastNotification(event_id, title, body, url, timestamp, self)
         self.active_popups[event_id] = toast
-        self.reposition_popups()
         toast.show_animated()
+        self.reposition_popups()
 
     def remove_popup(self, event_id):
         if event_id in self.active_popups:
@@ -77,7 +77,7 @@ class PopupManager(QObject):
         
         current_y = margin_top
         for event_id, toast in list(self.active_popups.items()):
-            if not toast.isVisible():
+            if getattr(toast, "is_closing", False) or not toast.isVisible():
                 continue
             
             x = screen.right() - toast.width() - margin_right
@@ -100,6 +100,7 @@ class ToastNotification(QWidget):
         
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         # Determine current theme to set fixed colors
         is_dark = config.get_theme_mode() == "dark"
@@ -108,19 +109,22 @@ class ToastNotification(QWidget):
         border_color = "#0078D7" if is_dark else "#0A84FF"
         time_color = "#AAAAAA" if is_dark else "#555555"
 
+        # The actual styled container is a QFrame to support translucent background + QSS properly
         self.setStyleSheet(f"""
-            QWidget#ToastRoot {{
+            QFrame#ToastRoot {{
                 background-color: {bg_color};
                 color: {fg_color};
                 border: 2px solid {border_color};
-                border-radius: 8px;
+                border-radius: 12px;
             }}
             QLabel#TitleLabel {{
+                background-color: transparent;
                 color: #FF3B30;
                 font-weight: bold;
                 font-size: 14px;
             }}
             QLabel#TimeLabel {{
+                background-color: transparent;
                 color: {time_color};
                 font-size: 10px;
             }}
@@ -128,8 +132,9 @@ class ToastNotification(QWidget):
                 background-color: {border_color};
                 color: white;
                 border: none;
-                border-radius: 4px;
-                padding: 5px 10px;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-weight: bold;
             }}
             QPushButton:hover {{
                 background-color: #005A9E;
@@ -138,9 +143,12 @@ class ToastNotification(QWidget):
                 background-color: transparent;
                 color: {fg_color};
                 font-weight: bold;
-                font-size: 16px;
+                font-size: 20px;
+                border-radius: 16px;
+                padding: 0px;
             }}
             QPushButton#CloseButton:hover {{
+                background-color: transparent;
                 color: #FF3B30;
             }}
             QTextEdit {{
@@ -150,9 +158,15 @@ class ToastNotification(QWidget):
                 font-family: Consolas, monospace;
             }}
         """)
-        self.setObjectName("ToastRoot")
         
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.container = QFrame(self)
+        self.container.setObjectName("ToastRoot")
+        main_layout.addWidget(self.container)
+        
+        layout = QVBoxLayout(self.container)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
         
@@ -170,7 +184,7 @@ class ToastNotification(QWidget):
         
         close_btn = QPushButton("×")
         close_btn.setObjectName("CloseButton")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(32, 32)
         close_btn.clicked.connect(self.close_toast)
         
         header_layout.addWidget(self.title_label)
@@ -264,6 +278,31 @@ class ToastNotification(QWidget):
             webbrowser.open(self.current_url)
 
     def close_toast(self):
+        self.is_closing = True
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.manager.reposition_popups()
+        
+        screen = QApplication.primaryScreen().availableGeometry()
+        # 右上（閉じるボタンの右上方向）に向かって消えるように、xを右に、yを上にずらす
+        target_pos = QPoint(screen.right() + 20, self.pos().y() - 100)
+        
+        self.close_pos_anim = QPropertyAnimation(self, b"pos")
+        self.close_pos_anim.setDuration(250)
+        self.close_pos_anim.setEasingCurve(QEasingCurve.Type.OutCubic) # 滑らかに減速する
+        self.close_pos_anim.setStartValue(self.pos())
+        self.close_pos_anim.setEndValue(target_pos)
+        
+        self.close_opacity_anim = QPropertyAnimation(self, b"windowOpacity")
+        self.close_opacity_anim.setDuration(250)
+        self.close_opacity_anim.setStartValue(1.0)
+        self.close_opacity_anim.setEndValue(0.0)
+        
+        self.close_pos_anim.finished.connect(self._on_close_anim_finished)
+        
+        self.close_pos_anim.start()
+        self.close_opacity_anim.start()
+
+    def _on_close_anim_finished(self):
         self.hide()
         self.manager.remove_popup(self.event_id)
         self.deleteLater()
@@ -781,8 +820,9 @@ class UIManager(QObject):
         self.settings_window.activateWindow()
 
     def send_test_notification(self):
+        from datetime import datetime
         test_data = {
-            "title": "テスト速報",
+            "title": f"テスト速報 ({datetime.now().strftime('%H:%M:%S')})",
             "body": "これは通知と表示のテストです。正常に動作しています。",
             "url": "https://axis.prioris.jp/"
         }
