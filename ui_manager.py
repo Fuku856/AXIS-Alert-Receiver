@@ -1,6 +1,5 @@
 import sys
 import os
-import tempfile
 import json
 import base64
 import urllib.request
@@ -14,7 +13,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QScrollArea, QTabWidget,
     QCheckBox, QComboBox, QLineEdit, QMessageBox, QFrame,
-    QSizePolicy, QSystemTrayIcon, QMenu, QSpacerItem, QSizePolicy
+    QSizePolicy
 )
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QPoint, Signal, QObject, Slot, QEasingCurve, QUrl, QByteArray, QBuffer, QIODevice
 from PySide6.QtGui import QIcon, QPixmap, QColor, QPalette, QCursor, QTextCursor, QFont, QAction, QDesktopServices, QPainter, QPen
@@ -280,6 +279,11 @@ class ToastNotification(QWidget):
     def close_toast(self):
         self.is_closing = True
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        
+        # 移動アニメーションなど他のアニメーションが実行中の場合は停止して競合を防ぐ
+        if hasattr(self, 'anim') and self.anim.state() == QPropertyAnimation.State.Running:
+            self.anim.stop()
+            
         self.manager.reposition_popups()
         
         screen = QApplication.primaryScreen().availableGeometry()
@@ -627,7 +631,7 @@ class UIManager(QObject):
         QTimer.singleShot(1000, lambda: self.start_background_update_checker(is_startup=True))
 
     def _generate_checkmark_file(self, color_hex, filename):
-        path = os.path.join(tempfile.gettempdir(), filename).replace('\\', '/')
+        path = os.path.join(config.get_config_dir(), filename).replace('\\', '/')
         if os.path.exists(path):
             return path
             
@@ -786,7 +790,7 @@ class UIManager(QObject):
             url = None
         else:
             event_id, title, body = message_formatter.format_message(channel, message_data)
-            url = message_data.get("url", None)
+            url = message_data.get("url", None) if isinstance(message_data, dict) else None
             text = f"[{timestamp}] [{channel}]\n{title}\n{body}\n"
             if url:
                 text += f"URL: {url}\n"
