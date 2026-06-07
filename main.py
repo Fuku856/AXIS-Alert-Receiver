@@ -71,6 +71,8 @@ def main():
     # トレイアイコンのセットアップ
     tray_icon = QSystemTrayIcon(get_app_icon(), app)
     tray_icon.setToolTip(config.APP_NAME)
+    ui.tray_icon_update_requested.connect(tray_icon.setIcon)
+    tray_icon.setIcon(ui._generate_status_icon("オフライン"))
     
     menu = QMenu()
     

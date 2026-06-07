@@ -13,10 +13,10 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QScrollArea, QTabWidget,
     QCheckBox, QComboBox, QLineEdit, QMessageBox, QFrame,
-    QSizePolicy
+    QSizePolicy, QStyle
 )
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QPoint, Signal, QObject, Slot, QEasingCurve, QUrl, QByteArray, QBuffer, QIODevice
-from PySide6.QtGui import QIcon, QPixmap, QColor, QPalette, QCursor, QTextCursor, QFont, QAction, QDesktopServices, QPainter, QPen
+from PySide6.QtGui import QIcon, QPixmap, QColor, QPalette, QCursor, QTextCursor, QFont, QAction, QDesktopServices, QPainter, QPen, QShortcut, QKeySequence, QTextDocument, QTextCharFormat, QPainterPath
 
 import config
 import notifier
@@ -42,6 +42,47 @@ def get_icon():
         return QIcon(png_path)
     return QIcon()
 
+def _make_search_icon(color_hex: str = "#AAAAAA") -> QIcon:
+    size = 64
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color_hex), 5, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    # レンズを右上に配置（左右反転）
+    painter.drawEllipse(28, 4, 32, 32)
+    # グリップを左下方向へ
+    painter.drawLine(32, 34, 8, 58)
+    painter.end()
+    return QIcon(pixmap)
+
+def _make_eye_icon(open_eye: bool, color_hex: str = "#AAAAAA") -> QIcon:
+    size = 64
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color_hex), 4, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    # アーモンド型の目輪郭（ベジェ曲線）
+    path = QPainterPath()
+    path.moveTo(4, 32)
+    path.quadTo(32, 6, 60, 32)
+    path.quadTo(32, 58, 4, 32)
+    painter.drawPath(path)
+    painter.setBrush(QColor(color_hex))
+    painter.drawEllipse(22, 22, 20, 20)
+    if not open_eye:
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(8, 52, 56, 12)
+    painter.end()
+    return QIcon(pixmap)
+
 class SignalEmitter(QObject):
     log_appended = Signal(str, object)
     status_updated = Signal(str)
@@ -53,12 +94,13 @@ class PopupManager(QObject):
         self.active_popups = {} # event_id -> ToastNotification
         
     def show_popup(self, event_id, title, body, url, timestamp):
+        timeout_sec = config.get_popup_timeout()
         if event_id in self.active_popups:
             toast = self.active_popups[event_id]
             toast.update_content(title, body, url, timestamp)
             return
 
-        toast = ToastNotification(event_id, title, body, url, timestamp, self)
+        toast = ToastNotification(event_id, title, body, url, timestamp, self, timeout_sec)
         self.active_popups[event_id] = toast
         toast.show_animated()
         self.reposition_popups()
@@ -90,7 +132,7 @@ class PopupManager(QObject):
             current_y += toast.height() + spacing
 
 class ToastNotification(QWidget):
-    def __init__(self, event_id, title, body, url, timestamp, manager):
+    def __init__(self, event_id, title, body, url, timestamp, manager, timeout_sec=0):
         super().__init__()
         self.event_id = event_id
         self.manager = manager
@@ -211,8 +253,11 @@ class ToastNotification(QWidget):
         footer_layout.addWidget(self.url_button)
         layout.addLayout(footer_layout)
         
-        self.setFixedSize(400, 250)
-        
+        self.setFixedWidth(400)
+        self.timeout_sec = timeout_sec
+        self._close_timer = None
+        self._remaining_ms = 0
+
         # Animations
         self.anim = QPropertyAnimation(self, b"pos")
         self.anim.setDuration(300)
@@ -242,7 +287,7 @@ class ToastNotification(QWidget):
         
         for line in diff:
             if line.startswith('+ '):
-                fmt = QTextCursor().charFormat()
+                fmt = QTextCharFormat()
                 fmt.setForeground(QColor(add_color))
                 fmt.setFontWeight(QFont.Weight.Bold)
                 cursor.insertText(line[2:] + "\n", fmt)
@@ -251,7 +296,7 @@ class ToastNotification(QWidget):
             elif line.startswith('? '):
                 pass
             else:
-                fmt = QTextCursor().charFormat()
+                fmt = QTextCharFormat()
                 cursor.insertText(line[2:] + "\n", fmt)
         
         self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
@@ -260,10 +305,17 @@ class ToastNotification(QWidget):
 
     def show_animated(self):
         screen = QApplication.primaryScreen().availableGeometry()
-        start_pos = QPoint(screen.right() + 10, self.pos().y()) # Start off screen
+        self.setMaximumHeight(screen.height() // 3)
+        start_pos = QPoint(screen.right() + 10, self.pos().y())
         self.move(start_pos)
         self.show()
+        self.adjustSize()
         QApplication.beep()
+        if self.timeout_sec > 0:
+            self._close_timer = QTimer(self)
+            self._close_timer.setSingleShot(True)
+            self._close_timer.timeout.connect(self.close_toast)
+            self._close_timer.start(self.timeout_sec * 1000)
 
     def move_to(self, target_pos):
         if self.pos() != target_pos:
@@ -271,6 +323,18 @@ class ToastNotification(QWidget):
             self.anim.setStartValue(self.pos())
             self.anim.setEndValue(target_pos)
             self.anim.start()
+
+    def enterEvent(self, event):
+        if self._close_timer and self._close_timer.isActive():
+            self._remaining_ms = self._close_timer.remainingTime()
+            self._close_timer.stop()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if self._close_timer and self._remaining_ms > 0:
+            self._close_timer.start(self._remaining_ms)
+            self._remaining_ms = 0
+        super().leaveEvent(event)
 
     def open_url(self):
         if self.current_url:
@@ -316,22 +380,194 @@ class LogWindow(QMainWindow):
         super().__init__()
         self.manager = manager
         self.setWindowTitle(f"{config.APP_NAME} - ログ")
-        self.resize(600, 400)
+        self.resize(700, 500)
         self.setWindowIcon(get_icon())
-        
+
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        # ツールバー行
+        toolbar = QWidget()
+        tb_layout = QHBoxLayout(toolbar)
+        tb_layout.setContentsMargins(0, 0, 0, 0)
+        tb_layout.setSpacing(6)
+
+        self.clear_btn = QPushButton("クリア")
+        self.clear_btn.setFixedWidth(64)
+        self.clear_btn.clicked.connect(self._clear_log)
+        tb_layout.addWidget(self.clear_btn)
+
+        tb_layout.addStretch()
+
+        # 検索エリア（初期非表示）
+        self.search_widget = QWidget()
+        sw_layout = QHBoxLayout(self.search_widget)
+        sw_layout.setContentsMargins(0, 0, 0, 0)
+        sw_layout.setSpacing(4)
+
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("検索...")
+        self.search_box.setMinimumWidth(100)
+        self.search_box.setClearButtonEnabled(True)
+        self.search_box.textChanged.connect(self._on_search_changed)
+        self.search_box.returnPressed.connect(lambda: self._search_text(1))
+        sw_layout.addWidget(self.search_box)
+
+        self.prev_btn = QPushButton()
+        self.prev_btn.setIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
+        self.prev_btn.setFixedSize(28, 28)
+        self.prev_btn.setToolTip("前の結果")
+        self.prev_btn.setProperty("navbtn", True)
+        self.prev_btn.clicked.connect(lambda: self._search_text(-1))
+        sw_layout.addWidget(self.prev_btn)
+
+        self.next_btn = QPushButton()
+        self.next_btn.setIcon(QApplication.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown))
+        self.next_btn.setFixedSize(28, 28)
+        self.next_btn.setToolTip("次の結果")
+        self.next_btn.setProperty("navbtn", True)
+        self.next_btn.clicked.connect(lambda: self._search_text(1))
+        sw_layout.addWidget(self.next_btn)
+
+        self.match_label = QLabel("")
+        self.match_label.setFixedWidth(72)
+        sw_layout.addWidget(self.match_label)
+
+        tb_layout.addWidget(self.search_widget)
+        self.search_widget.hide()
+
+        self.search_toggle_btn = QPushButton()
+        self.search_toggle_btn.setIcon(_make_search_icon())
+        self.search_toggle_btn.setFixedSize(32, 32)
+        self.search_toggle_btn.setToolTip("検索 (Ctrl+F)")
+        self.search_toggle_btn.setProperty("navbtn", True)
+        self.search_toggle_btn.clicked.connect(self._toggle_search)
+        tb_layout.addWidget(self.search_toggle_btn)
+
+        layout.addWidget(toolbar)
+
         self.text_edit = QTextEdit()
         self.text_edit.setReadOnly(True)
         self.text_edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.text_edit.setFont(QFont("Consolas", 10))
         layout.addWidget(self.text_edit)
 
-    def append_text(self, text):
+        self._search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self._search_shortcut.activated.connect(self._toggle_search)
+        self._nav_query = ""
+
+    def _toggle_search(self):
+        if self.search_widget.isVisible():
+            self.search_widget.hide()
+            self.search_box.clear()
+            self.text_edit.setExtraSelections([])
+            self.match_label.setText("")
+            self._nav_query = ""
+        else:
+            self.search_widget.show()
+            self.search_box.setFocus()
+
+    def _clear_log(self):
+        self.text_edit.clear()
+        self._nav_query = ""
+
+    def _on_search_changed(self, query):
+        self._nav_query = ""
+        self._highlight_all(query)
+
+    def _highlight_all(self, query):
+        self.text_edit.setExtraSelections([])
+        if not query:
+            self.match_label.setText("")
+            return
+
+        fmt = QTextCharFormat()
+        fmt.setBackground(QColor("#FFC107"))
+        fmt.setForeground(QColor("#000000"))
+
+        doc = self.text_edit.document()
+        cursor = doc.find(query)
+        selections = []
+        while not cursor.isNull():
+            sel = QTextEdit.ExtraSelection()
+            sel.format = fmt
+            sel.cursor = cursor
+            selections.append(sel)
+            cursor = doc.find(query, cursor)
+
+        self.text_edit.setExtraSelections(selections)
+        count = len(selections)
+        self.match_label.setText(f"{count}件" if count > 0 else "なし")
+
+    def _search_text(self, direction):
+        query = self.search_box.text()
+        if not query:
+            return
+
+        if self._nav_query != query:
+            # クエリが変わった（または初回ナビゲーション）: 先頭/末尾からスキャン開始
+            cursor = self.text_edit.textCursor()
+            if direction == 1:
+                cursor.movePosition(QTextCursor.MoveOperation.Start)
+            else:
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.text_edit.setTextCursor(cursor)
+            self._nav_query = query
+
+        if direction == 1:
+            found = self.text_edit.find(query)
+        else:
+            found = self.text_edit.find(query, QTextDocument.FindFlag.FindBackward)
+        if not found:
+            cursor = self.text_edit.textCursor()
+            if direction == 1:
+                cursor.movePosition(QTextCursor.MoveOperation.Start)
+            else:
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.text_edit.setTextCursor(cursor)
+            if direction == 1:
+                self.text_edit.find(query)
+            else:
+                self.text_edit.find(query, QTextDocument.FindFlag.FindBackward)
+        self._highlight_all(query)
+        # ナビゲーション時は現在位置/合計件数 形式で上書き
+        current_start = self.text_edit.textCursor().selectionStart()
+        doc = self.text_edit.document()
+        idx = 0
+        total = 0
+        c = doc.find(query)
+        while not c.isNull():
+            total += 1
+            if c.selectionStart() == current_start:
+                idx = total
+            c = doc.find(query, c)
+        self.match_label.setText(f"{idx}/{total}件" if total > 0 else "なし")
+
+    def append_entry(self, text, color_hex=None):
         self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
-        self.text_edit.insertPlainText(text)
+        cursor = self.text_edit.textCursor()
+        fmt = QTextCharFormat()
+        if color_hex:
+            fmt.setForeground(QColor(color_hex))
+        cursor.setCharFormat(fmt)
+        cursor.insertText(text)
         self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
+        self._trim_log()
+
+    def _trim_log(self):
+        doc = self.text_edit.document()
+        if doc.blockCount() > 5000:
+            cursor = QTextCursor(doc)
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            cursor.movePosition(
+                QTextCursor.MoveOperation.NextBlock,
+                QTextCursor.MoveMode.KeepAnchor,
+                500
+            )
+            cursor.removeSelectedText()
 
     def closeEvent(self, event):
         event.ignore()
@@ -377,15 +613,33 @@ class SettingsWindow(QMainWindow):
         layout = QVBoxLayout(tab)
         
         layout.addWidget(QLabel("AXIS アクセストークン (JWT):"))
+        token_row = QHBoxLayout()
         self.token_entry = QLineEdit(config.get_token())
+        self.token_entry.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_entry.textChanged.connect(self._update_checkboxes_state)
-        layout.addWidget(self.token_entry)
+        token_row.addWidget(self.token_entry)
+        self.token_visibility_btn = QPushButton()
+        self.token_visibility_btn.setIcon(_make_eye_icon(False))
+        self.token_visibility_btn.setFixedSize(32, 32)
+        self.token_visibility_btn.setToolTip("トークンを表示/非表示")
+        self.token_visibility_btn.setProperty("navbtn", True)
+        self.token_visibility_btn.setCheckable(True)
+        self.token_visibility_btn.toggled.connect(self._toggle_token_visibility)
+        token_row.addWidget(self.token_visibility_btn)
+        layout.addLayout(token_row)
         
         self.status_label = QLabel(f"状態: {self.manager.client.status}")
         layout.addWidget(self.status_label)
         
         layout.addStretch()
         self.tabs.addTab(tab, "AXISトークン")
+
+    def _toggle_token_visibility(self, show: bool):
+        self.token_entry.setEchoMode(
+            QLineEdit.EchoMode.Normal if show else QLineEdit.EchoMode.Password
+        )
+        fg = "#D4D4D4" if config.get_theme_mode() == "dark" else "#000000"
+        self.token_visibility_btn.setIcon(_make_eye_icon(show, fg))
 
     def _setup_channels_tab(self):
         tab = QWidget()
@@ -447,14 +701,26 @@ class SettingsWindow(QMainWindow):
         self.auto_open_log_var = QCheckBox("受信時にログ画面を自動表示する")
         self.auto_open_log_var.setChecked(config.get_auto_open_log())
         layout.addWidget(self.auto_open_log_var)
-        
+
+        timeout_layout = QHBoxLayout()
+        timeout_layout.addWidget(QLabel("ポップアップ自動クリア:"))
+        self.timeout_combo = QComboBox()
+        self.timeout_options = {"なし": 0, "5秒": 5, "10秒": 10, "30秒": 30}
+        self.timeout_combo.addItems(list(self.timeout_options.keys()))
+        current_timeout = config.get_popup_timeout()
+        current_text = next((k for k, v in self.timeout_options.items() if v == current_timeout), "10秒")
+        self.timeout_combo.setCurrentText(current_text)
+        timeout_layout.addWidget(self.timeout_combo)
+        timeout_layout.addStretch()
+        layout.addLayout(timeout_layout)
+
         layout.addSpacing(10)
         layout.addWidget(QLabel("テーマ設定:"))
         
         theme_layout = QHBoxLayout()
         theme_layout.addWidget(QLabel("テーマモード:"))
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["dark", "light"])
+        self.theme_combo.addItems(["Dark", "Light"])
         self.theme_combo.setCurrentText(config.get_theme_mode())
         # Theme is applied on save
         theme_layout.addWidget(self.theme_combo)
@@ -471,11 +737,11 @@ class SettingsWindow(QMainWindow):
         interval_layout = QHBoxLayout()
         interval_layout.addWidget(QLabel("定期的に更新を確認する間隔:"))
         self.interval_combo = QComboBox()
-        self.interval_options = {"確認しない": 0, "1日おき": 1, "3日おき": 3, "7日おき": 7, "30日おき": 30}
+        self.interval_options = {"なし": 0, "1日": 1, "3日": 3, "7日": 7, "30日": 30}
         self.interval_combo.addItems(list(self.interval_options.keys()))
         
         current_interval = config.get_auto_update_interval_days()
-        current_text = next((k for k, v in self.interval_options.items() if v == current_interval), "1日おき")
+        current_text = next((k for k, v in self.interval_options.items() if v == current_interval), "1日")
         self.interval_combo.setCurrentText(current_text)
         
         interval_layout.addWidget(self.interval_combo)
@@ -580,6 +846,7 @@ class SettingsWindow(QMainWindow):
         config.set_token(new_token)
         config.set_show_popup(self.show_popup_var.isChecked())
         config.set_auto_open_log(self.auto_open_log_var.isChecked())
+        config.set_popup_timeout(self.timeout_options[self.timeout_combo.currentText()])
         config.set_check_update_on_startup(self.check_startup_var.isChecked())
         
         selected_interval = self.interval_combo.currentText()
@@ -608,6 +875,8 @@ class SettingsWindow(QMainWindow):
 
 
 class UIManager(QObject):
+    tray_icon_update_requested = Signal(QIcon)
+
     def __init__(self, axis_client, app):
         super().__init__()
         self.client = axis_client
@@ -662,6 +931,7 @@ class UIManager(QObject):
             fg_color = "#D4D4D4"
             base_color = "#2D2D30"
             border_color = "#3E3E42"
+            hover_color = border_color
             disabled_fg = "#777777"
             disabled_bg = "#2A2A2A"
             disabled_border = "#444444"
@@ -670,6 +940,7 @@ class UIManager(QObject):
             fg_color = "#000000"
             base_color = "#FFFFFF"
             border_color = "#CCCCCC"
+            hover_color = "#D6E8FA"
             disabled_fg = "#AAAAAA"
             disabled_bg = "#EAEAEA"
             disabled_border = "#CCCCCC"
@@ -702,7 +973,7 @@ class UIManager(QObject):
             padding: 6px 15px;
         }}
         QPushButton:hover {{
-            background-color: {border_color};
+            background-color: {hover_color};
         }}
         QPushButton[primary="true"] {{
             background-color: {accent_color};
@@ -763,9 +1034,20 @@ class UIManager(QObject):
             background-color: {accent_color};
             color: white;
         }}
+        QPushButton[navbtn="true"] {{
+            padding: 2px;
+        }}
         """
         self.app.setStyleSheet(qss)
-        
+
+        if hasattr(self, 'log_window'):
+            self.log_window.search_toggle_btn.setIcon(_make_search_icon(fg_color))
+        if hasattr(self, 'settings_window'):
+            is_visible = self.settings_window.token_visibility_btn.isChecked()
+            self.settings_window.token_visibility_btn.setIcon(
+                _make_eye_icon(is_visible, fg_color)
+            )
+
         # In case active popups need a style refresh, it's easier to recreate them, but here we just let them use their own inline styles which we evaluate on creation.
 
     def append_log(self, channel, message_data):
@@ -806,12 +1088,66 @@ class UIManager(QObject):
             if config.get_show_popup():
                 self.popup_manager.show_popup(event_id, title, body, url, timestamp)
 
-        self.log_window.append_text(text)
+        self.log_window.append_entry(text, self._get_channel_color(channel))
 
     @Slot(str)
     def _handle_status_update(self, status):
         if self.settings_window.isVisible():
             self.settings_window.status_label.setText(f"状態: {status}")
+        self.tray_icon_update_requested.emit(self._generate_status_icon(status))
+
+    def _get_channel_color(self, channel: str) -> str:
+        mode = config.get_theme_mode()
+        colors_dark = {
+            "breaking-news": "#FF6B6B",
+            "システム": "#9E9E9E",
+            "パースエラー": "#FFA726",
+        }
+        colors_light = {
+            "breaking-news": "#C62828",
+            "システム": "#757575",
+            "パースエラー": "#E65100",
+        }
+        colors = colors_dark if mode == "dark" else colors_light
+        return colors.get(channel, "#4FC3F7" if mode == "dark" else "#1565C0")
+
+    def _generate_status_icon(self, status: str) -> QIcon:
+        if "オンライン" in status:
+            dot_color = "#4CAF50"
+        elif any(k in status for k in ("サーバ取得中", "接続中", "接続確立", "切断されました")):
+            dot_color = "#FFC107"
+        else:
+            dot_color = "#F44336"
+
+        base_icon = get_icon()
+        if not base_icon.isNull():
+            base_pixmap = base_icon.pixmap(64, 64)
+        else:
+            base_pixmap = QPixmap(64, 64)
+            base_pixmap.fill(QColor("#0078D7"))
+            p = QPainter(base_pixmap)
+            p.setPen(QColor("#FFFFFF"))
+            p.setFont(QFont("Arial", 28, QFont.Weight.Bold))
+            p.drawText(base_pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "A")
+            p.end()
+
+        result = QPixmap(64, 64)
+        result.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(result)
+        painter.drawPixmap(0, 0, base_pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        dot_size = 18
+        x = 64 - dot_size - 2
+        y = 64 - dot_size - 2
+        border_color = "#1E1E1E" if config.get_theme_mode() == "dark" else "#F3F3F3"
+        painter.setBrush(QColor(border_color))
+        painter.drawEllipse(x - 2, y - 2, dot_size + 4, dot_size + 4)
+        painter.setBrush(QColor(dot_color))
+        painter.drawEllipse(x, y, dot_size, dot_size)
+        painter.end()
+        return QIcon(result)
 
     def show_log_window(self):
         self.log_window.showNormal()
