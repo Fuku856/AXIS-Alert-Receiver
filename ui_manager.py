@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import base64
+import urllib.parse
 import urllib.request
 import threading
 import re
@@ -266,6 +267,7 @@ class ToastNotification(QWidget):
         self.timeout_sec = timeout_sec
         self._close_timer = None
         self._remaining_ms = 0
+        self.is_closing = False
 
         # Animations
         self.anim = QPropertyAnimation(self, b"pos")
@@ -350,9 +352,13 @@ class ToastNotification(QWidget):
 
     def open_url(self):
         if self.current_url:
-            webbrowser.open(self.current_url)
+            parsed = urllib.parse.urlparse(self.current_url)
+            if parsed.scheme in ("http", "https"):
+                webbrowser.open(self.current_url)
 
     def close_toast(self):
+        if self.is_closing:
+            return
         self.is_closing = True
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         
