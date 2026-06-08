@@ -109,6 +109,16 @@ class PopupManager(QObject):
             del self.active_popups[event_id]
             self.reposition_popups()
 
+    def compute_next_y(self):
+        margin_top = 20
+        spacing = 15
+        current_y = margin_top
+        for toast in self.active_popups.values():
+            if getattr(toast, "is_closing", False) or not toast.isVisible():
+                continue
+            current_y += toast.height() + spacing
+        return current_y
+
     def reposition_popups(self):
         screen = QApplication.primaryScreen().availableGeometry()
         margin_right = 20
@@ -305,10 +315,12 @@ class ToastNotification(QWidget):
     def show_animated(self):
         screen = QApplication.primaryScreen().availableGeometry()
         self.setMaximumHeight(screen.height() // 3)
-        start_pos = QPoint(screen.right() + 10, self.pos().y())
+        target_y = self.manager.compute_next_y()
+        start_pos = QPoint(screen.right() + 10, target_y)
         self.move(start_pos)
         self.show()
         self.adjustSize()
+        QApplication.processEvents()
         self.manager.reposition_popups()
         QApplication.beep()
         if self.timeout_sec > 0:
