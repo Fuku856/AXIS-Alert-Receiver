@@ -923,15 +923,15 @@ class UIManager(QObject):
         self.emitter.status_updated.connect(self._handle_status_update)
         self.emitter.release_info_updated.connect(self._handle_release_info)
         
-        self.popup_manager = PopupManager(self)
-        
-        self.log_window = LogWindow(self)
-        self.settings_window = SettingsWindow(self)
-        
-        self.apply_theme()
-        
         self.is_latest_version = None
         self._update_info_fetched = False
+
+        self.popup_manager = PopupManager(self)
+
+        self.log_window = LogWindow(self)
+        self.settings_window = SettingsWindow(self)
+
+        self.apply_theme()
         
         QTimer.singleShot(1000, lambda: self.start_background_update_checker(is_startup=True))
 
