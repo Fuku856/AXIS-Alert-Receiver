@@ -38,9 +38,7 @@ jobs:
       run: |
         pyinstaller --noconfirm --onedir --windowed `
           --hidden-import=win32crypt `
-          --hidden-import=PySide6.QtWidgets `
-          --hidden-import=PySide6.QtCore `
-          --hidden-import=PySide6.QtGui `
+          --collect-all PySide6 `
           --add-data "icon.ico;." `
           --icon "icon.ico" `
           --name "AXIS-Alert-Receiver" `
