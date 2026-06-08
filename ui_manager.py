@@ -757,7 +757,7 @@ class SettingsWindow(QMainWindow):
         theme_layout.addWidget(QLabel("テーマモード:"))
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Dark", "Light"])
-        self.theme_combo.setCurrentText(config.get_theme_mode())
+        self.theme_combo.setCurrentText(config.get_theme_mode().capitalize())
         # Theme is applied on save
         theme_layout.addWidget(self.theme_combo)
         theme_layout.addStretch()
@@ -888,7 +888,7 @@ class SettingsWindow(QMainWindow):
         selected_interval = self.interval_combo.currentText()
         config.set_auto_update_interval_days(self.interval_options[selected_interval])
         
-        config.set_theme_mode(self.theme_combo.currentText())
+        config.set_theme_mode(self.theme_combo.currentText().lower())
         self.manager.apply_theme() # Apply theme immediately
         
         self.manager.client.restart()
