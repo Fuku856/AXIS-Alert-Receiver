@@ -103,7 +103,6 @@ class PopupManager(QObject):
         toast = ToastNotification(event_id, title, body, url, timestamp, self, timeout_sec)
         self.active_popups[event_id] = toast
         toast.show_animated()
-        self.reposition_popups()
 
     def remove_popup(self, event_id):
         if event_id in self.active_popups:
