@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import base64
+import urllib.parse
 import urllib.request
 import threading
 import re
@@ -89,47 +90,74 @@ class SignalEmitter(QObject):
     release_info_updated = Signal(str, str)
 
 class PopupManager(QObject):
+    _MARGIN_TOP = 20
+    _MARGIN_RIGHT = 20
+    _MARGIN_BOTTOM = 20
+    _SPACING = 15
+    _MIN_POPUP_HEIGHT = 150  # 表示前のスペース判定に使う最小高さ推定値
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.active_popups = {} # event_id -> ToastNotification
-        
+        self.active_popups = {}  # event_id -> ToastNotification
+        self.pending_queue = []  # (event_id, title, body, url, timestamp, timeout_sec)
+
+    def _max_bottom(self):
+        return QApplication.primaryScreen().availableGeometry().bottom() - self._MARGIN_BOTTOM
+
+    def _has_space(self):
+        return self.compute_next_y() + self._MIN_POPUP_HEIGHT <= self._max_bottom()
+
     def show_popup(self, event_id, title, body, url, timestamp):
         timeout_sec = config.get_popup_timeout()
         if event_id in self.active_popups:
-            toast = self.active_popups[event_id]
-            toast.update_content(title, body, url, timestamp)
+            self.active_popups[event_id].update_content(title, body, url, timestamp)
             return
 
+        # キューに同じ event_id があれば内容を更新して待機継続
+        for i, item in enumerate(self.pending_queue):
+            if item[0] == event_id:
+                self.pending_queue[i] = (event_id, title, body, url, timestamp, timeout_sec)
+                return
+
+        if self._has_space():
+            self._create_and_show(event_id, title, body, url, timestamp, timeout_sec)
+        else:
+            self.pending_queue.append((event_id, title, body, url, timestamp, timeout_sec))
+
+    def _create_and_show(self, event_id, title, body, url, timestamp, timeout_sec):
         toast = ToastNotification(event_id, title, body, url, timestamp, self, timeout_sec)
         self.active_popups[event_id] = toast
         toast.show_animated()
-        self.reposition_popups()
 
     def remove_popup(self, event_id):
         if event_id in self.active_popups:
             del self.active_popups[event_id]
             self.reposition_popups()
+            # クローズアニメーション(250ms)完了後にキューから次を表示
+            QTimer.singleShot(300, self._show_next_from_queue)
+
+    def _show_next_from_queue(self):
+        while self.pending_queue and self._has_space():
+            event_id, title, body, url, timestamp, timeout_sec = self.pending_queue.pop(0)
+            if event_id not in self.active_popups:
+                self._create_and_show(event_id, title, body, url, timestamp, timeout_sec)
+
+    def compute_next_y(self):
+        current_y = self._MARGIN_TOP
+        for toast in self.active_popups.values():
+            if toast.is_closing or not toast.isVisible():
+                continue
+            current_y += toast.height() + self._SPACING
+        return current_y
 
     def reposition_popups(self):
         screen = QApplication.primaryScreen().availableGeometry()
-        margin_right = 20
-        margin_top = 20
-        spacing = 15
-        
-        current_y = margin_top
-        for event_id, toast in list(self.active_popups.items()):
-            if getattr(toast, "is_closing", False) or not toast.isVisible():
+        current_y = self._MARGIN_TOP
+        for toast in list(self.active_popups.values()):
+            if toast.is_closing or not toast.isVisible():
                 continue
-            
-            x = screen.right() - toast.width() - margin_right
-            y = current_y
-            
-            target_pos = QPoint(x, y)
-            
-            # Animate movement
-            toast.move_to(target_pos)
-            
-            current_y += toast.height() + spacing
+            toast.move_to(QPoint(screen.right() - toast.width() - self._MARGIN_RIGHT, current_y))
+            current_y += toast.height() + self._SPACING
 
 class ToastNotification(QWidget):
     def __init__(self, event_id, title, body, url, timestamp, manager, timeout_sec=0):
@@ -257,6 +285,7 @@ class ToastNotification(QWidget):
         self.timeout_sec = timeout_sec
         self._close_timer = None
         self._remaining_ms = 0
+        self.is_closing = False
 
         # Animations
         self.anim = QPropertyAnimation(self, b"pos")
@@ -306,10 +335,13 @@ class ToastNotification(QWidget):
     def show_animated(self):
         screen = QApplication.primaryScreen().availableGeometry()
         self.setMaximumHeight(screen.height() // 3)
-        start_pos = QPoint(screen.right() + 10, self.pos().y())
+        target_y = self.manager.compute_next_y()
+        start_pos = QPoint(screen.right() + 10, target_y)
         self.move(start_pos)
         self.show()
         self.adjustSize()
+        QApplication.processEvents()
+        self.manager.reposition_popups()
         QApplication.beep()
         if self.timeout_sec > 0:
             self._close_timer = QTimer(self)
@@ -338,9 +370,13 @@ class ToastNotification(QWidget):
 
     def open_url(self):
         if self.current_url:
-            webbrowser.open(self.current_url)
+            parsed = urllib.parse.urlparse(self.current_url)
+            if parsed.scheme in ("http", "https"):
+                webbrowser.open(self.current_url)
 
     def close_toast(self):
+        if self.is_closing:
+            return
         self.is_closing = True
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         
@@ -721,7 +757,7 @@ class SettingsWindow(QMainWindow):
         theme_layout.addWidget(QLabel("テーマモード:"))
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Dark", "Light"])
-        self.theme_combo.setCurrentText(config.get_theme_mode())
+        self.theme_combo.setCurrentText(config.get_theme_mode().capitalize())
         # Theme is applied on save
         theme_layout.addWidget(self.theme_combo)
         theme_layout.addStretch()
@@ -852,7 +888,7 @@ class SettingsWindow(QMainWindow):
         selected_interval = self.interval_combo.currentText()
         config.set_auto_update_interval_days(self.interval_options[selected_interval])
         
-        config.set_theme_mode(self.theme_combo.currentText())
+        config.set_theme_mode(self.theme_combo.currentText().lower())
         self.manager.apply_theme() # Apply theme immediately
         
         self.manager.client.restart()

@@ -150,7 +150,7 @@ def set_auto_open_log(auto_open):
     save_config(config)
 
 def get_theme_mode():
-    return load_config().get("theme_mode", "dark") # default dark
+    return load_config().get("theme_mode", "dark").lower()
 
 def set_theme_mode(mode):
     config = load_config()
