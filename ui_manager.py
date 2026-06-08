@@ -309,8 +309,8 @@ class ToastNotification(QWidget):
         start_pos = QPoint(screen.right() + 10, self.pos().y())
         self.move(start_pos)
         self.show()
-        self.manager.reposition_popups()
         self.adjustSize()
+        self.manager.reposition_popups()
         QApplication.beep()
         if self.timeout_sec > 0:
             self._close_timer = QTimer(self)
