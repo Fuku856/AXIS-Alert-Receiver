@@ -124,22 +124,25 @@ class PopupManager(QObject):
         screen = QApplication.primaryScreen().availableGeometry()
         margin_right = 20
         margin_top = 20
+        margin_bottom = 20
         spacing = 15
-        
+        max_bottom = screen.bottom() - margin_bottom
+
         current_y = margin_top
+        to_close = []
         for event_id, toast in list(self.active_popups.items()):
-            if getattr(toast, "is_closing", False) or not toast.isVisible():
+            if toast.is_closing or not toast.isVisible():
                 continue
-            
-            x = screen.right() - toast.width() - margin_right
-            y = current_y
-            
-            target_pos = QPoint(x, y)
-            
-            # Animate movement
-            toast.move_to(target_pos)
-            
+
+            if current_y + toast.height() > max_bottom:
+                to_close.append(toast)
+                continue
+
+            toast.move_to(QPoint(screen.right() - toast.width() - margin_right, current_y))
             current_y += toast.height() + spacing
+
+        for toast in to_close:
+            QTimer.singleShot(0, toast.close_toast)
 
 class ToastNotification(QWidget):
     def __init__(self, event_id, title, body, url, timestamp, manager, timeout_sec=0):
