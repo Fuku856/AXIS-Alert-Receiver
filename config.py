@@ -149,3 +149,18 @@ def set_auto_open_log(auto_open):
     config["auto_open_log"] = auto_open
     save_config(config)
 
+def get_theme_mode():
+    return load_config().get("theme_mode", "dark") # default dark
+
+def set_theme_mode(mode):
+    config = load_config()
+    config["theme_mode"] = mode
+    save_config(config)
+
+def get_popup_timeout():
+    return load_config().get("popup_timeout", 10)
+
+def set_popup_timeout(seconds):
+    cfg = load_config()
+    cfg["popup_timeout"] = seconds
+    save_config(cfg)
