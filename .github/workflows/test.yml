@@ -37,7 +37,13 @@ jobs:
 
     - name: Build executable
       run: |
-        pyinstaller --noconfirm --onedir --windowed --hidden-import=win32crypt --add-data "icon.ico;." --icon "icon.ico" --name "AXIS-Alert-Receiver" main.py
+        pyinstaller --noconfirm --onedir --windowed `
+          --hidden-import=win32crypt `
+          --collect-all PySide6 `
+          --add-data "icon.ico;." `
+          --icon "icon.ico" `
+          --name "AXIS-Alert-Receiver" `
+          main.py
 
     - name: Test Create Portable Zip
       run: |

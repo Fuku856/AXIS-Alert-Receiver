@@ -2,6 +2,8 @@ import os
 import sys
 from winotify import Notification
 
+import security_utils
+
 def get_app_path():
     """実行ファイルのパスまたはスクリプトのディレクトリを取得（アイコン指定などのため）"""
     if getattr(sys, 'frozen', False):
@@ -21,16 +23,20 @@ def show_toast(title, message, url=None):
             
         app_id = "AXIS Alert Receiver"
 
+        # durationは"short"(約7秒)とする。"long"(約25秒)だとバナーが画面を占有し続け、
+        # Windowsは同時に1枚しかバナーを表示しないため後続の通知が長時間表示されない。
         toast = Notification(
             app_id=app_id,
             title=title,
             msg=message,
             icon=icon_path,
-            duration="long"
+            duration="short"
         )
-        if url:
+        # urlはサーバ受信データ由来のため、http/https以外のスキーム起動や
+        # XML特殊文字によるインジェクションを防ぐべく検証する。安全なURLのみ採用する。
+        if url and security_utils.is_safe_web_url(url):
             toast.add_actions(label="詳細を見る", launch=url)
-            
+
             # winotifyでは、通知自体のクリックアクション（launchパラメータ）を
             # Notificationクラスのコンストラクタで指定できないため、アクションボタンで対応する。
             toast.launch = url
