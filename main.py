@@ -84,6 +84,8 @@ def main():
     
     action_quit = menu.addAction("終了")
     def on_quit():
+        # トースト表示中にquitするとイベントループ終了が失われることがあるため先に破棄する
+        ui.popup_manager.close_all_immediately()
         client.stop()
         tray_icon.hide()
         app.quit()
@@ -109,6 +111,7 @@ def main():
     try:
         sys.exit(app.exec())
     except KeyboardInterrupt:
+        ui.popup_manager.close_all_immediately()
         client.stop()
         tray_icon.hide()
         sys.exit(0)

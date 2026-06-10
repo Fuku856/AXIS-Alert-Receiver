@@ -1,12 +1,9 @@
 import sys
 import os
 import json
-import base64
-import urllib.parse
 import urllib.request
 import threading
 import re
-import uuid
 import webbrowser
 from datetime import datetime
 
@@ -22,6 +19,7 @@ from PySide6.QtGui import QIcon, QPixmap, QColor, QPalette, QCursor, QTextCursor
 import config
 import notifier
 import message_formatter
+import security_utils
 import difflib
 
 def get_app_path():
@@ -109,9 +107,11 @@ class PopupManager(QObject):
 
     def show_popup(self, event_id, title, body, url, timestamp):
         timeout_sec = config.get_popup_timeout()
-        if event_id in self.active_popups:
-            self.active_popups[event_id].update_content(title, body, url, timestamp)
+        existing = self.active_popups.get(event_id)
+        if existing is not None and not existing.is_closing:
+            existing.update_content(title, body, url, timestamp)
             return
+        # クローズ中の同IDトーストは間もなく消えるため、続報は新規表示として扱う
 
         # キューに同じ event_id があれば内容を更新して待機継続
         for i, item in enumerate(self.pending_queue):
@@ -129,17 +129,40 @@ class PopupManager(QObject):
         self.active_popups[event_id] = toast
         toast.show_animated()
 
-    def remove_popup(self, event_id):
-        if event_id in self.active_popups:
+    def close_all_immediately(self):
+        """アプリ終了時用: アニメーションなしで全トーストを即時破棄する。
+
+        トーストが表示されたまま quit() するとイベントループの終了が
+        間欠的に失われプロセスが残留するため、終了前に必ず呼ぶこと。
+        """
+        self.pending_queue.clear()
+        for toast in list(self.active_popups.values()):
+            toast.is_closing = True
+            if toast._close_timer is not None:
+                toast._close_timer.stop()
+            toast.anim.stop()
+            toast.hide()
+            toast.deleteLater()
+        self.active_popups.clear()
+
+    def remove_popup(self, event_id, toast=None):
+        # クローズ中に同IDの続報で新トーストに置き換わっている場合があるため、
+        # 呼び出し元のトースト自身が登録されているときだけ辞書から外す。
+        existing = self.active_popups.get(event_id)
+        if existing is not None and (toast is None or existing is toast):
             del self.active_popups[event_id]
-            self.reposition_popups()
-            # クローズアニメーション(250ms)完了後にキューから次を表示
-            QTimer.singleShot(300, self._show_next_from_queue)
+        self.reposition_popups()
+        # クローズアニメーション(250ms)完了後にキューから次を表示
+        QTimer.singleShot(300, self._show_next_from_queue)
 
     def _show_next_from_queue(self):
         while self.pending_queue and self._has_space():
             event_id, title, body, url, timestamp, timeout_sec = self.pending_queue.pop(0)
-            if event_id not in self.active_popups:
+            existing = self.active_popups.get(event_id)
+            if existing is not None and not existing.is_closing:
+                # 待機中に同IDのトーストが表示済みになっていたら内容更新で済ませる
+                existing.update_content(title, body, url, timestamp)
+            else:
                 self._create_and_show(event_id, title, body, url, timestamp, timeout_sec)
 
     def compute_next_y(self):
@@ -330,7 +353,22 @@ class ToastNotification(QWidget):
         
         self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
         self.last_body = body
+        # 続報を読む時間を確保するため、自動クローズまでの時間を満額に戻す
+        self._restart_close_timer()
         QApplication.beep()
+
+    def _restart_close_timer(self):
+        if self.timeout_sec <= 0:
+            return
+        if self._close_timer is None:
+            self._close_timer = QTimer(self)
+            self._close_timer.setSingleShot(True)
+            self._close_timer.timeout.connect(self.close_toast)
+        if not self._close_timer.isActive() and self._remaining_ms > 0:
+            # ホバーで一時停止中: 再開時(leaveEvent)に使う残り時間を満額に戻す
+            self._remaining_ms = self.timeout_sec * 1000
+        else:
+            self._close_timer.start(self.timeout_sec * 1000)
 
     def show_animated(self):
         screen = QApplication.primaryScreen().availableGeometry()
@@ -343,11 +381,7 @@ class ToastNotification(QWidget):
         QApplication.processEvents()
         self.manager.reposition_popups()
         QApplication.beep()
-        if self.timeout_sec > 0:
-            self._close_timer = QTimer(self)
-            self._close_timer.setSingleShot(True)
-            self._close_timer.timeout.connect(self.close_toast)
-            self._close_timer.start(self.timeout_sec * 1000)
+        self._restart_close_timer()
 
     def move_to(self, target_pos):
         if self.pos() != target_pos:
@@ -369,10 +403,8 @@ class ToastNotification(QWidget):
         super().leaveEvent(event)
 
     def open_url(self):
-        if self.current_url:
-            parsed = urllib.parse.urlparse(self.current_url)
-            if parsed.scheme in ("http", "https"):
-                webbrowser.open(self.current_url)
+        if security_utils.is_safe_web_url(self.current_url):
+            webbrowser.open(self.current_url)
 
     def close_toast(self):
         if self.is_closing:
@@ -408,7 +440,7 @@ class ToastNotification(QWidget):
 
     def _on_close_anim_finished(self):
         self.hide()
-        self.manager.remove_popup(self.event_id)
+        self.manager.remove_popup(self.event_id, self)
         self.deleteLater()
 
 class LogWindow(QMainWindow):
@@ -845,21 +877,15 @@ class SettingsWindow(QMainWindow):
 
     def _update_checkboxes_state(self, *args):
         token = self.token_entry.text().strip()
-        is_valid_jwt = len(token.split('.')) == 3
+        payload = security_utils.decode_jwt_payload(token)
+        is_valid_jwt = payload is not None
         subscribed_in_token = []
-        
-        if is_valid_jwt:
-            try:
-                parts = token.split('.')
-                payload_b64 = parts[1]
-                payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
-                payload_json = base64.urlsafe_b64decode(payload_b64).decode('utf-8')
-                
-                for ch in self.channel_widgets.keys():
-                    if ch in payload_json:
-                        subscribed_in_token.append(ch)
-            except Exception:
-                pass
+
+        if payload:
+            # ペイロード内の文字列値との完全一致で判定する
+            # (JSON文字列全体への部分一致だと他フィールドの値で誤検出するため)
+            token_values = security_utils.collect_string_tokens(payload)
+            subscribed_in_token = [ch for ch in self.channel_widgets.keys() if ch in token_values]
                 
         for ch, chk_widget in self.channel_widgets.items():
             is_subscribed = is_valid_jwt and ch in subscribed_in_token
